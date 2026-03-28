@@ -6,7 +6,7 @@ local Geom = require("ui/geometry")
 local TextWidget = require("ui/widget/textwidget")
 local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
-local logger = require("logger")
+local datetime = require("datetime")
 local _ = require("gettext")
 local Screen = Device.screen
 
@@ -24,11 +24,7 @@ end
 
 function FooterText:loadSettings()
     local footer_settings = self.ui.view.footer.settings
-    self.enabled = G_reader_settings:isTrue("footertext_enabled")
-    -- Default to enabled if setting doesn't exist yet
-    if G_reader_settings:readSetting("footertext_enabled") == nil then
-        self.enabled = true
-    end
+    self.enabled = G_reader_settings:readSetting("footertext_enabled", true)
     self.format = G_reader_settings:readSetting("footertext_format", "Page %c")
     self.font_size = G_reader_settings:readSetting("footertext_font_size", footer_settings.text_font_size)
     self.font_face_name = "ffont"
@@ -88,7 +84,6 @@ function FooterText:expandTokens(format_str)
     local avg_time = self.ui.view.footer:getAvgTimePerPage()
     if avg_time and avg_time == avg_time and pageno then
         local user_duration_format = G_reader_settings:readSetting("duration_format", "classic")
-        local datetime = require("datetime")
         local chapter_pages_left = self.ui.toc:getChapterPagesLeft(pageno)
             or doc:getTotalPagesLeft(pageno)
         time_left_chapter = datetime.secondsToClockDuration(
@@ -100,9 +95,14 @@ function FooterText:expandTokens(format_str)
 
     -- %b, %B - battery
     local powerd = Device:getPowerDevice()
-    local batt_lvl = powerd:getCapacity() or "N/A"
-    local batt_symbol = powerd:getBatterySymbol(
-        powerd:isCharged(), powerd:isCharging(), batt_lvl) or "N/A"
+    local batt_lvl = powerd:getCapacity()
+    local batt_symbol
+    if batt_lvl then
+        batt_symbol = powerd:getBatterySymbol(powerd:isCharged(), powerd:isCharging(), batt_lvl) or "N/A"
+    else
+        batt_lvl = "N/A"
+        batt_symbol = "N/A"
+    end
 
     local replace = {
         ["%%T"] = tostring(title),
@@ -124,7 +124,7 @@ function FooterText:updateText()
     if new_text ~= self.current_text then
         self.current_text = new_text
         self.text_widget:setText(new_text)
-        -- Update center container width to match new text size
+        -- Update center container height to match new text size
         self.center_container.dimen.h = self.text_widget:getSize().h
     end
 end
