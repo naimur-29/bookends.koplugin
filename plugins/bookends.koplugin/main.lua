@@ -29,10 +29,8 @@ function Bookends:init()
     self.ui.menu:registerToMainMenu(self)
     self.ui.view:registerViewModule("bookends", self)
     self.session_start_time = os.time()
-    -- Session tracking: use flow-aware page for stable page number support
-    local start_page = self:getFlowAwarePage()
-    self.session_start_page = start_page
-    self.session_max_page = start_page
+    self.session_start_page = nil -- set on first page update
+    self.session_max_page = nil
     self.dirty = true
     self.position_cache = {}
 
@@ -189,7 +187,11 @@ end
 -- Event handlers
 function Bookends:onPageUpdate()
     local current = self:getFlowAwarePage()
-    if current > (self.session_max_page or 0) then
+    if not self.session_start_page then
+        -- First page update: record starting position
+        self.session_start_page = current
+        self.session_max_page = current
+    elseif current > self.session_max_page then
         self.session_max_page = current
     end
     self:markDirty()
