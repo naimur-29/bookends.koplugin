@@ -43,13 +43,11 @@ end
 
 --- Build a TextWidget or MultiLineWidget for a single line or multi-line string.
 -- @param text string: the expanded text (may contain newlines)
--- @param face font face object
--- @param bold boolean or table: single bool for all lines, or {[1]=bool, [2]=bool, ...} per line
+-- @param line_configs table: array of {face=, bold=} per line
 -- @param h_anchor string: "left", "center", or "right"
 -- @param max_width number or nil: if set, truncate lines to this pixel width
 -- @return widget, width, height
-function OverlayWidget.buildTextWidget(text, face, bold, h_anchor, max_width)
-    -- Split on newlines (skip empty lines)
+function OverlayWidget.buildTextWidget(text, line_configs, h_anchor, max_width)
     local lines = {}
     for line in text:gmatch("([^\n]+)") do
         table.insert(lines, line)
@@ -58,19 +56,17 @@ function OverlayWidget.buildTextWidget(text, face, bold, h_anchor, max_width)
         return nil, 0, 0
     end
 
-    -- Helper: get bold for a given line index
-    local function getBold(i)
-        if type(bold) == "table" then
-            return bold[i] or false
-        end
-        return bold or false
+    -- Get config for line i (fall back to last config if fewer configs than lines)
+    local function getConfig(i)
+        return line_configs[i] or line_configs[#line_configs] or { face = nil, bold = false }
     end
 
     if #lines == 1 then
+        local cfg = getConfig(1)
         local tw = TextWidget:new{
             text = lines[1],
-            face = face,
-            bold = getBold(1),
+            face = cfg.face,
+            bold = cfg.bold,
             max_width = max_width,
             truncate_with_ellipsis = max_width ~= nil,
         }
@@ -78,7 +74,6 @@ function OverlayWidget.buildTextWidget(text, face, bold, h_anchor, max_width)
         return tw, size.w, size.h
     end
 
-    -- Multi-line: build individual TextWidgets and stack manually
     local align = "center"
     if h_anchor == "left" then
         align = "left"
@@ -90,10 +85,11 @@ function OverlayWidget.buildTextWidget(text, face, bold, h_anchor, max_width)
     local max_w = 0
     local total_h = 0
     for i, line in ipairs(lines) do
+        local cfg = getConfig(i)
         local tw = TextWidget:new{
             text = line,
-            face = face,
-            bold = getBold(i),
+            face = cfg.face,
+            bold = cfg.bold,
             max_width = max_width,
             truncate_with_ellipsis = max_width ~= nil,
         }
@@ -113,22 +109,17 @@ function OverlayWidget.buildTextWidget(text, face, bold, h_anchor, max_width)
 end
 
 --- Measure the width of the widest line in a text string.
--- @param bold boolean or table: single bool for all lines, or per-line table
-function OverlayWidget.measureTextWidth(text, face, bold)
+-- @param line_configs table: array of {face=, bold=} per line
+function OverlayWidget.measureTextWidth(text, line_configs)
     local max_w = 0
     local i = 0
     for line in text:gmatch("([^\n]+)") do
         i = i + 1
-        local line_bold
-        if type(bold) == "table" then
-            line_bold = bold[i] or false
-        else
-            line_bold = bold or false
-        end
+        local cfg = line_configs[i] or line_configs[#line_configs] or { face = nil, bold = false }
         local tw = TextWidget:new{
             text = line,
-            face = face,
-            bold = line_bold,
+            face = cfg.face,
+            bold = cfg.bold,
         }
         local w = tw:getSize().w
         tw:free()

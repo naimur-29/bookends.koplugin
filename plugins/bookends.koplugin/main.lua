@@ -137,22 +137,31 @@ function Bookends:paintTo(bb, x, y)
         end
     end
 
-    -- Phase 2: Measure all active positions
+    -- Phase 2: Build per-line rendering configs and measure
     local measurements = {}
     for key, text in pairs(expanded) do
-        local face = Font:getFace(
-            self:getPositionSetting(key, "font_face"),
-            self:getPositionSetting(key, "font_size"))
-        -- Per-line bold: use line_bold array if available, else fall back to position default
         local pos_settings = self.positions[key]
-        local bold
-        if pos_settings.line_bold and #pos_settings.line_bold > 0 then
-            bold = pos_settings.line_bold -- table passed to buildTextWidget
-        else
-            bold = self:getPositionSetting(key, "font_bold")
+        local default_face_name = self:getPositionSetting(key, "font_face")
+        local default_font_size = self:getPositionSetting(key, "font_size")
+        local default_bold = self:getPositionSetting(key, "font_bold")
+
+        -- Build per-line config: { {face=, bold=}, {face=, bold=}, ... }
+        local line_configs = {}
+        for i = 1, #pos_settings.lines do
+            local face_name = (pos_settings.line_font_face and pos_settings.line_font_face[i])
+                or default_face_name
+            local font_size = (pos_settings.line_font_size and pos_settings.line_font_size[i])
+                or default_font_size
+            local bold = (pos_settings.line_bold and pos_settings.line_bold[i])
+                or default_bold
+            table.insert(line_configs, {
+                face = Font:getFace(face_name, font_size),
+                bold = bold or false,
+            })
         end
-        local w = OverlayWidget.measureTextWidth(text, face, bold)
-        measurements[key] = { width = w, face = face, bold = bold }
+
+        local w = OverlayWidget.measureTextWidth(text, line_configs)
+        measurements[key] = { width = w, line_configs = line_configs }
     end
 
     -- Phase 3: Calculate overlap limits per row
@@ -196,7 +205,7 @@ function Bookends:paintTo(bb, x, y)
 
                 local max_width = limits[rk.limit_key]
                 local widget, w, h = OverlayWidget.buildTextWidget(
-                    expanded[key], m.face, m.bold, pos_def.h_anchor, max_width)
+                    expanded[key], m.line_configs, pos_def.h_anchor, max_width)
 
                 if widget then
                     local v_off = self:getPositionSetting(key, "v_offset")
@@ -506,32 +515,75 @@ function Bookends:editLineString(pos, line_idx)
 
     local current_text = pos_settings.lines[line_idx] or ""
 
-    -- Per-line bold: stored in line_bold array
-    if not pos_settings.line_bold then
-        pos_settings.line_bold = {}
-    end
-    local is_bold = pos_settings.line_bold[line_idx] or false
+    -- Per-line style state
+    pos_settings.line_bold = pos_settings.line_bold or {}
+    pos_settings.line_font_size = pos_settings.line_font_size or {}
+    pos_settings.line_font_face = pos_settings.line_font_face or {}
 
-    -- The bold button — we hold a reference so we can update its text
+    local is_bold = pos_settings.line_bold[line_idx] or false
+    local line_size = pos_settings.line_font_size[line_idx] -- nil = use default
+    local line_face = pos_settings.line_font_face[line_idx] -- nil = use default
+
+    -- Style buttons using text_func so refreshButtons() picks up changes
     local bold_button = {
-        text = is_bold and _("Style: Bold") or _("Style: Regular"),
-        callback = function() end, -- replaced below
+        text_func = function()
+            return is_bold and _("Bold") or _("Regular")
+        end,
+        callback = function() end,
+    }
+    local size_button = {
+        text_func = function()
+            return _("Size") .. ": " .. (line_size or self:getPositionSetting(pos.key, "font_size"))
+        end,
+        callback = function() end,
+    }
+    local font_button = {
+        text_func = function()
+            if line_face then
+                return _("Font") .. " \xE2\x9C\x93"
+            end
+            return _("Font...")
+        end,
+        callback = function() end,
     }
 
     local format_dialog
-    -- Now wire the bold button callback (needs format_dialog reference)
+
     bold_button.callback = function()
         is_bold = not is_bold
-        bold_button.text = is_bold and _("Style: Bold") or _("Style: Regular")
-        format_dialog:refreshButtons()
+        format_dialog:reinit()
+    end
+
+    size_button.callback = function()
+        local current = line_size or self:getPositionSetting(pos.key, "font_size")
+        UIManager:show(SpinWidget:new{
+            value = current,
+            value_min = 8,
+            value_max = 36,
+            default_value = self:getPositionSetting(pos.key, "font_size"),
+            title_text = _("Font size for line") .. " " .. line_idx,
+            ok_text = _("Set"),
+            callback = function(spin)
+                line_size = spin.value
+                format_dialog:reinit()
+            end,
+        })
+    end
+
+    font_button.callback = function()
+        format_dialog:onCloseKeyboard()
+        self:showFontPicker(function(font_filename)
+            line_face = font_filename
+            format_dialog:reinit()
+        end)
     end
 
     format_dialog = InputDialog:new{
         title = pos.label .. " \xE2\x80\x94 " .. _("Line") .. " " .. line_idx,
         input = current_text,
         buttons = {
-            -- Row 1: style
-            { bold_button },
+            -- Row 1: style controls
+            { bold_button, size_button, font_button },
             -- Row 2: main actions
             {
                 {
@@ -540,10 +592,9 @@ function Bookends:editLineString(pos, line_idx)
                     callback = function()
                         if current_text == "" and (pos_settings.lines[line_idx] or "") == "" then
                             table.remove(pos_settings.lines, line_idx)
-                            -- Clean up line_bold too
-                            if pos_settings.line_bold then
-                                table.remove(pos_settings.line_bold, line_idx)
-                            end
+                            table.remove(pos_settings.line_bold, line_idx)
+                            table.remove(pos_settings.line_font_size, line_idx)
+                            table.remove(pos_settings.line_font_face, line_idx)
                             self:savePositionSetting(pos.key)
                         end
                         UIManager:close(format_dialog)
@@ -574,15 +625,14 @@ function Bookends:editLineString(pos, line_idx)
                         local new_text = format_dialog:getInputText()
                         if new_text == "" then
                             table.remove(pos_settings.lines, line_idx)
-                            if pos_settings.line_bold then
-                                table.remove(pos_settings.line_bold, line_idx)
-                            end
+                            table.remove(pos_settings.line_bold, line_idx)
+                            table.remove(pos_settings.line_font_size, line_idx)
+                            table.remove(pos_settings.line_font_face, line_idx)
                         else
                             pos_settings.lines[line_idx] = new_text
-                            if not pos_settings.line_bold then
-                                pos_settings.line_bold = {}
-                            end
                             pos_settings.line_bold[line_idx] = is_bold or nil
+                            pos_settings.line_font_size[line_idx] = line_size -- nil = default
+                            pos_settings.line_font_face[line_idx] = line_face -- nil = default
                         end
                         self:savePositionSetting(pos.key)
                         UIManager:close(format_dialog)
@@ -594,6 +644,30 @@ function Bookends:editLineString(pos, line_idx)
     }
     UIManager:show(format_dialog)
     format_dialog:onShowKeyboard()
+end
+
+function Bookends:showFontPicker(on_select)
+    local Menu = require("ui/widget/menu")
+    local items = self:buildFontMenu(
+        function() return "" end, -- no current selection
+        function(font_filename)
+            on_select(font_filename)
+        end)
+
+    local menu
+    menu = Menu:new{
+        title = _("Select font"),
+        item_table = items,
+        width = math.floor(Screen:getWidth() * 0.8),
+        height = math.floor(Screen:getHeight() * 0.8),
+        onMenuChoice = function(_, item)
+            UIManager:close(menu)
+            if item.callback then
+                item.callback()
+            end
+        end,
+    }
+    UIManager:show(menu)
 end
 
 -- ─── Token picker ────────────────────────────────────────
