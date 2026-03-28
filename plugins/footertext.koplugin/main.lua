@@ -161,12 +161,8 @@ end
 
 function FooterText:updatePosition()
     local screen_size = Screen:getSize()
-    local footer_height = 0
-    if self.ui.view.footer_visible then
-        footer_height = self.ui.view.footer:getHeight()
-    end
     self.bottom_container.dimen.w = screen_size.w
-    self.bottom_container.dimen.h = screen_size.h - footer_height - self.vertical_offset
+    self.bottom_container.dimen.h = screen_size.h - self.vertical_offset
     self.center_container.dimen.w = screen_size.w
 end
 
@@ -182,11 +178,6 @@ function FooterText:onPosUpdate(pos)
     end
 end
 
-function FooterText:onReaderFooterVisibilityChange()
-    if self.enabled then
-        UIManager:setDirty(self.ui, "ui")
-    end
-end
 
 function FooterText:onSetDimensions(dimen)
     if self.enabled then
