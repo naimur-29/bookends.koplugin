@@ -3,7 +3,7 @@ local datetime = require("datetime")
 
 local Tokens = {}
 
-function Tokens.expand(format_str, ui, session_start_time, session_start_page)
+function Tokens.expand(format_str, ui, session_start_time, session_pages_turned)
     -- Fast path: no tokens
     if not format_str:find("%%") then
         return format_str
@@ -62,16 +62,8 @@ function Tokens.expand(format_str, ui, session_start_time, session_start_page)
         end
     end
 
-    -- Session pages read
-    local session_pages = ""
-    if pageno and session_start_page then
-        local read = pageno - session_start_page
-        if read > 0 then
-            session_pages = read
-        else
-            session_pages = 0
-        end
-    end
+    -- Session pages read (counted from page turn events)
+    local session_pages = session_pages_turned or 0
 
     -- Pages left in book
     local pages_left_book = ""

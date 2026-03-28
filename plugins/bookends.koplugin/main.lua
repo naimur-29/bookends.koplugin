@@ -29,7 +29,7 @@ function Bookends:init()
     self.ui.menu:registerToMainMenu(self)
     self.ui.view:registerViewModule("bookends", self)
     self.session_start_time = os.time()
-    self.session_start_page = self.ui.view.state.page or 0
+    self.session_pages_turned = 0
     self.dirty = true
     self.position_cache = {}
 
@@ -170,7 +170,10 @@ function Bookends:resolveLineConfig(face_name, font_size, style)
 end
 
 -- Event handlers
-function Bookends:onPageUpdate() self:markDirty() end
+function Bookends:onPageUpdate()
+    self.session_pages_turned = (self.session_pages_turned or 0) + 1
+    self:markDirty()
+end
 function Bookends:onPosUpdate() self:markDirty() end
 function Bookends:onReaderFooterVisibilityChange() self:markDirty() end
 function Bookends:onSetDimensions() self:markDirty() end
@@ -190,7 +193,7 @@ function Bookends:paintTo(bb, x, y)
         if self:isPositionActive(pos.key) then
             local lines = self.positions[pos.key].lines
             local joined = table.concat(lines, "\n")
-            expanded[pos.key] = Tokens.expand(joined, self.ui, self.session_start_time, self.session_start_page)
+            expanded[pos.key] = Tokens.expand(joined, self.ui, self.session_start_time, self.session_pages_turned)
         end
     end
 
@@ -351,7 +354,7 @@ function Bookends:buildMainMenu()
                     return pos.label
                 else
                     -- Expand tokens for preview
-                    local preview = Tokens.expand(lines[1], self.ui, self.session_start_time, self.session_start_page)
+                    local preview = Tokens.expand(lines[1], self.ui, self.session_start_time, self.session_pages_turned)
                     if #lines > 1 then
                         preview = preview .. " ..."
                     end
@@ -465,7 +468,7 @@ function Bookends:buildPositionMenu(pos)
     for i, line in ipairs(lines) do
         table.insert(menu, {
             text_func = function()
-                local preview = Tokens.expand(self.positions[pos.key].lines[i] or "", self.ui, self.session_start_time, self.session_start_page)
+                local preview = Tokens.expand(self.positions[pos.key].lines[i] or "", self.ui, self.session_start_time, self.session_pages_turned)
                 if #preview > 45 then
                     preview = preview:sub(1, 42) .. "..."
                 end
