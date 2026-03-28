@@ -147,6 +147,41 @@ function FooterText:buildWidget()
     }
 end
 
+function FooterText:updatePosition()
+    local screen_size = Screen:getSize()
+    local footer_height = 0
+    if self.ui.view.footer_visible then
+        footer_height = self.ui.view.footer:getHeight()
+    end
+    self.bottom_container.dimen.w = screen_size.w
+    self.bottom_container.dimen.h = screen_size.h - footer_height - self.vertical_offset
+    self.center_container.dimen.w = screen_size.w
+end
+
+function FooterText:onPageUpdate(pageno)
+    if self.enabled then
+        UIManager:setDirty(self.ui, "ui")
+    end
+end
+
+function FooterText:onPosUpdate(pos)
+    if self.enabled then
+        UIManager:setDirty(self.ui, "ui")
+    end
+end
+
+function FooterText:onReaderFooterVisibilityChange()
+    if self.enabled then
+        UIManager:setDirty(self.ui, "ui")
+    end
+end
+
+function FooterText:onSetDimensions(dimen)
+    if self.enabled then
+        UIManager:setDirty(self.ui, "ui")
+    end
+end
+
 function FooterText:paintTo(bb, x, y)
     if not self.enabled then return end
     self:updateText()
