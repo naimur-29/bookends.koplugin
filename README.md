@@ -55,6 +55,16 @@ A KOReader plugin for placing configurable text overlays at the corners and edge
 
 Six positions: **Top-left**, **Top-center**, **Top-right**, **Bottom-left**, **Bottom-center**, **Bottom-right**. Each position can have multiple lines of text.
 
+### Screenshots
+
+| Reading page | Menu with previews |
+|:---:|:---:|
+| ![Reading page](screenshots/reading-page.png) | ![Menu previews](screenshots/menu-previews.png) |
+
+| Line editor | Icon picker | Token picker |
+|:---:|:---:|:---:|
+| ![Line editor](screenshots/line-editor.png) | ![Icon picker](screenshots/icon-picker.png) | ![Token picker](screenshots/token-picker.png) |
+
 ### Quick start
 
 1. Copy `plugins/bookends.koplugin/` to your KOReader plugins directory
