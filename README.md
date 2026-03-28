@@ -19,6 +19,7 @@ Plugins go in the KOReader `plugins/` directory. Copy the entire `.koplugin` fol
 | Plugin | Description |
 |--------|-------------|
 | [displaymodehomefolder.koplugin](plugins/displaymodehomefolder.koplugin) | Use a different display mode and sort order in subfolders compared to the home folder. For example: home folder shows a cover grid sorted by date, series subfolders show a detailed list sorted by series reading order. Integrates into CoverBrowser's Display Mode menu. ([FR #15198](https://github.com/koreader/koreader/issues/15198)) |
+| [footertext.koplugin](plugins/footertext.koplugin) | Display a configurable text label centered at the bottom of the reading screen, independent of the status bar. Default: "Page 28". Uses the same format tokens as the sleep screen message (`%c`, `%t`, `%T`, etc.). |
 
 ## Installation paths
 
