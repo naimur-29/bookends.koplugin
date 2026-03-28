@@ -79,20 +79,21 @@ end
 function IconPicker:show(on_select)
     local item_table = self:buildItemTable()
 
+    local Device = require("device")
+    local Screen = Device.screen
+
     local menu
     menu = Menu:new{
         title = _("Insert icon"),
         item_table = item_table,
-        width = math.floor(require("device").screen:getWidth() * 0.8),
-        height = math.floor(require("device").screen:getHeight() * 0.8),
+        width = math.floor(Screen:getWidth() * 0.8),
+        height = math.floor(Screen:getHeight() * 0.8),
         items_per_page = 14,
         onMenuChoice = function(_, item)
             if item.glyph then
+                UIManager:close(menu)
                 on_select(item.glyph)
             end
-        end,
-        close_callback = function()
-            UIManager:close(menu)
         end,
     }
     UIManager:show(menu)

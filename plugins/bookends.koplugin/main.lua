@@ -112,6 +112,15 @@ function Bookends:paintTo(bb, x, y)
                 break
             end
         end
+        -- Also detect positions that became inactive since last frame
+        if not changed then
+            for key in pairs(self.position_cache) do
+                if not expanded[key] then
+                    changed = true
+                    break
+                end
+            end
+        end
         if not changed then
             -- Repaint existing widgets at their cached positions
             for _, pos in ipairs(self.POSITIONS) do

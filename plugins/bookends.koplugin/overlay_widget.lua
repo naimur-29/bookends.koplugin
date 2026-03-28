@@ -70,17 +70,15 @@ end
 -- @return number: pixel width of widest line
 function OverlayWidget.measureTextWidth(text, face, bold)
     local max_w = 0
-    for line in text:gmatch("([^\n]*)") do
-        if line ~= "" then
-            local tw = TextWidget:new{
-                text = line,
-                face = face,
-                bold = bold,
-            }
-            local w = tw:getSize().w
-            tw:free()
-            if w > max_w then max_w = w end
-        end
+    for line in text:gmatch("([^\n]+)") do
+        local tw = TextWidget:new{
+            text = line,
+            face = face,
+            bold = bold,
+        }
+        local w = tw:getSize().w
+        tw:free()
+        if w > max_w then max_w = w end
     end
     return max_w
 end
