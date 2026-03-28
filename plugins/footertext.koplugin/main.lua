@@ -109,16 +109,16 @@ function FooterText:expandTokens(format_str)
     end
 
     local replace = {
-        ["%%T"] = tostring(title),
-        ["%%A"] = tostring(authors),
-        ["%%S"] = tostring(series),
-        ["%%c"] = tostring(currentpage),
-        ["%%t"] = tostring(totalpages),
-        ["%%p"] = tostring(percent),
-        ["%%h"] = tostring(time_left_chapter),
-        ["%%H"] = tostring(time_left_doc),
-        ["%%b"] = tostring(batt_lvl),
-        ["%%B"] = tostring(batt_symbol),
+        ["%T"] = tostring(title),
+        ["%A"] = tostring(authors),
+        ["%S"] = tostring(series),
+        ["%c"] = tostring(currentpage),
+        ["%t"] = tostring(totalpages),
+        ["%p"] = tostring(percent),
+        ["%h"] = tostring(time_left_chapter),
+        ["%H"] = tostring(time_left_doc),
+        ["%b"] = tostring(batt_lvl),
+        ["%B"] = tostring(batt_symbol),
     }
     return format_str:gsub("(%%%a)", replace)
 end
@@ -208,8 +208,9 @@ function FooterText:onCloseWidget()
 end
 
 function FooterText:addToMainMenu(menu_items)
-    menu_items.footer_text = {
+    menu_items.footertext = {
         text = _("Footer text"),
+        sorting_hint = "progress_indicator",
         sub_item_table = {
             {
                 text = _("Enable footer text"),
