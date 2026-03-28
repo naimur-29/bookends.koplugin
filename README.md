@@ -20,6 +20,21 @@ Plugins go in the KOReader `plugins/` directory. Copy the entire `.koplugin` fol
 | [bookends.koplugin](plugins/bookends.koplugin) | Configurable text overlays at 6 screen positions with tokens, icons, per-line styling, and presets. See [full documentation](#bookends) below. |
 | [displaymodehomefolder.koplugin](plugins/displaymodehomefolder.koplugin) | Use a different display mode and sort order in subfolders compared to the home folder. Integrates into CoverBrowser's Display Mode menu. ([FR #15198](https://github.com/koreader/koreader/issues/15198)) |
 
+## Style Tweaks
+
+CSS style tweaks go in the KOReader `styletweaks/` directory. Each `.css` file is automatically loaded and applied to documents. Create the directory if it doesn't exist.
+
+| Tweak | Description |
+|-------|-------------|
+| [captions.css](styletweaks/captions.css) | Caption styling |
+| [footnotes.css](styletweaks/footnotes.css) | Footnote formatting |
+| [headings.css](styletweaks/headings.css) | Heading styles |
+| [hr.css](styletweaks/hr.css) | Horizontal rule styling |
+| [img.css](styletweaks/img.css) | Centre images, constrain to page width |
+| [paragraphs.css](styletweaks/paragraphs.css) | Paragraph spacing and indentation |
+| [tables.css](styletweaks/tables.css) | Table formatting |
+| [toc.css](styletweaks/toc.css) | Table of contents styling |
+
 ---
 
 ## Bookends
@@ -199,11 +214,11 @@ Line 2: %g / %G (%P)
 
 ## Installation paths
 
-| Device | Patches | Plugins |
-|--------|---------|---------|
-| Kindle | `/mnt/us/koreader/patches/` | `/mnt/us/koreader/plugins/` |
-| Kobo | `/mnt/onboard/.adds/koreader/patches/` | `/mnt/onboard/.adds/koreader/plugins/` |
-| Android | Varies -- find your KOReader install directory | Same |
+| Device | Patches | Plugins | Style Tweaks |
+|--------|---------|---------|--------------|
+| Kindle | `/mnt/us/koreader/patches/` | `/mnt/us/koreader/plugins/` | `/mnt/us/koreader/styletweaks/` |
+| Kobo | `/mnt/onboard/.adds/koreader/patches/` | `/mnt/onboard/.adds/koreader/plugins/` | `/mnt/onboard/.adds/koreader/styletweaks/` |
+| Android | Varies -- find your KOReader install directory | Same | Same |
 
 Create the `patches/` directory if it doesn't already exist.
 
