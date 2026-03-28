@@ -208,7 +208,7 @@ end
 function FooterText:addToMainMenu(menu_items)
     menu_items.footertext = {
         text = _("Footer text"),
-        sorting_hint = "status_bar",
+        sorting_hint = "setting",
         sub_item_table = {
             {
                 text = _("Enable footer text"),
