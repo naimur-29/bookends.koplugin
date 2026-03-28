@@ -57,6 +57,32 @@ local function getActiveCollateOverride()
     return G_reader_settings:readSetting("subfolder_collate")
 end
 
+-- Fallback doc_props for directory entries that skip the collation item_func.
+-- Without this, metadata-based sorts (series, title, authors, keywords) crash
+-- with "attempt to index field 'doc_props' (a nil value)" on the "../" entry.
+local _NIL_PROPS = {
+    series = "\u{FFFF}", series_index = nil,
+    display_title = "", authors = "\u{FFFF}", keywords = "\u{FFFF}",
+}
+
+-- Wrap a collation's init_sort_func to guard against nil doc_props.
+-- Only needed for metadata-based sorts that use item.doc_props.
+local function safeSortFunc(collate)
+    if not collate or not collate.item_func then return collate end
+    if collate._safe_wrapped then return collate end
+    local orig_init = collate.init_sort_func
+    collate.init_sort_func = function(cache)
+        local sort_func, new_cache = orig_init(cache)
+        return function(a, b)
+            if not a.doc_props then a.doc_props = _NIL_PROPS end
+            if not b.doc_props then b.doc_props = _NIL_PROPS end
+            return sort_func(a, b)
+        end, new_cache
+    end
+    collate._safe_wrapped = true
+    return collate
+end
+
 -- Apply display mode via CoverBrowser if available.
 local function applyDisplayMode(mode)
     local fm = FileManager.instance
@@ -117,7 +143,7 @@ function M.apply()
         if override_id then
             local collate = self.collates[override_id]
             if collate then
-                return collate, override_id
+                return safeSortFunc(collate), override_id
             end
         end
         return _orig_getCollate(self)
