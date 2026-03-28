@@ -19,7 +19,6 @@ Plugins go in the KOReader `plugins/` directory. Copy the entire `.koplugin` fol
 |--------|-------------|
 | [bookends.koplugin](plugins/bookends.koplugin) | Configurable text overlays at 6 screen positions with tokens, icons, per-line styling, and presets. See [full documentation](#bookends) below. |
 | [displaymodehomefolder.koplugin](plugins/displaymodehomefolder.koplugin) | Use a different display mode and sort order in subfolders compared to the home folder. Integrates into CoverBrowser's Display Mode menu. ([FR #15198](https://github.com/koreader/koreader/issues/15198)) |
-| [footertext.koplugin](plugins/footertext.koplugin) | *(Superseded by Bookends)* Simple single-position footer text overlay. |
 
 ---
 
