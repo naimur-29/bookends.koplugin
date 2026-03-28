@@ -500,14 +500,7 @@ function Bookends:buildPositionMenu(pos)
                 self:editLineString(pos, i)
             end,
             hold_callback = function()
-                -- Long-press to remove line
-                local ps = self.positions[pos.key]
-                table.remove(ps.lines, i)
-                if ps.line_style then table.remove(ps.line_style, i) end
-                if ps.line_font_size then table.remove(ps.line_font_size, i) end
-                if ps.line_font_face then table.remove(ps.line_font_face, i) end
-                self:savePositionSetting(pos.key)
-                self:markDirty()
+                self:showLineManageDialog(pos, i)
             end,
         })
     end
@@ -737,6 +730,72 @@ function Bookends:editLineString(pos, line_idx)
     format_dialog:onShowKeyboard()
 end
 
+function Bookends:showLineManageDialog(pos, line_idx)
+    local ConfirmBox = require("ui/widget/confirmbox")
+    local ps = self.positions[pos.key]
+    local num_lines = #ps.lines
+    local T = require("ffi/util").template
+
+    local function removeLine()
+        table.remove(ps.lines, line_idx)
+        if ps.line_style then table.remove(ps.line_style, line_idx) end
+        if ps.line_font_size then table.remove(ps.line_font_size, line_idx) end
+        if ps.line_font_face then table.remove(ps.line_font_face, line_idx) end
+        self:savePositionSetting(pos.key)
+        self:markDirty()
+    end
+
+    local function swapLines(a, b)
+        -- Swap in all parallel arrays
+        ps.lines[a], ps.lines[b] = ps.lines[b], ps.lines[a]
+        if ps.line_style then
+            ps.line_style[a], ps.line_style[b] = ps.line_style[b], ps.line_style[a]
+        end
+        if ps.line_font_size then
+            ps.line_font_size[a], ps.line_font_size[b] = ps.line_font_size[b], ps.line_font_size[a]
+        end
+        if ps.line_font_face then
+            ps.line_font_face[a], ps.line_font_face[b] = ps.line_font_face[b], ps.line_font_face[a]
+        end
+        self:savePositionSetting(pos.key)
+        self:markDirty()
+    end
+
+    local other_buttons = {}
+    if line_idx > 1 then
+        table.insert(other_buttons, {
+            {
+                text = _("Move up"),
+                callback = function()
+                    swapLines(line_idx, line_idx - 1)
+                end,
+            },
+        })
+    end
+    if line_idx < num_lines then
+        table.insert(other_buttons, {
+            {
+                text = _("Move down"),
+                callback = function()
+                    swapLines(line_idx, line_idx + 1)
+                end,
+            },
+        })
+    end
+
+    UIManager:show(ConfirmBox:new{
+        text = T(_("Line %1: %2"), line_idx, ps.lines[line_idx]),
+        icon = "notice-question",
+        ok_text = _("Delete"),
+        ok_callback = function()
+            removeLine()
+        end,
+        cancel_text = _("Cancel"),
+        other_buttons_first = true,
+        other_buttons = other_buttons,
+    })
+end
+
 function Bookends:showFontPicker(current_face, on_select)
     local Menu = require("ui/widget/menu")
     local cre = require("document/credocument"):engineInit()
@@ -788,8 +847,8 @@ Bookends.TOKEN_CATALOG = {
     { _("Page / Progress"), {
         { "%c", _("Current page number") },
         { "%t", _("Total pages") },
-        { "%p", _("Book % read") },
-        { "%P", _("Chapter % read") },
+        { "%p", _("Book percentage read") },
+        { "%P", _("Chapter percentage read") },
         { "%g", _("Pages read in chapter") },
         { "%G", _("Total pages in chapter") },
         { "%l", _("Pages left in chapter") },
@@ -811,7 +870,7 @@ Bookends.TOKEN_CATALOG = {
         { "%s", _("Session pages read") },
     }},
     { _("Device"), {
-        { "%b", _("Battery level (number)") },
+        { "%b", _("Battery level") },
         { "%B", _("Battery icon (dynamic)") },
         { "%W", _("Wi-Fi icon (dynamic)") },
         { "%m", _("RAM used %") },

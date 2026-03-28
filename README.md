@@ -70,8 +70,8 @@ Tokens are placeholders that expand to live values. Insert them by typing `%` fo
 |-------|-------------|---------|
 | `%c` | Current page number | *42* |
 | `%t` | Total pages | *218* |
-| `%p` | Book percentage read | *19* |
-| `%P` | Chapter percentage read | *65* |
+| `%p` | Book percentage read | *19%* |
+| `%P` | Chapter percentage read | *65%* |
 | `%g` | Pages read in chapter | *7* |
 | `%G` | Total pages in chapter | *12* |
 | `%l` | Pages left in chapter | *5* |
@@ -93,16 +93,16 @@ Tokens are placeholders that expand to live values. Insert them by typing `%` fo
 
 | Token | Description | Example |
 |-------|-------------|---------|
-| `%h` | Time left in chapter | *0:12* |
-| `%H` | Time left in book | *3:45* |
-| `%R` | Session reading time | *0:23* |
+| `%h` | Time left in chapter | *0h 12m* |
+| `%H` | Time left in book | *3h 45m* |
+| `%R` | Session reading time | *0h 23m* |
 | `%s` | Session pages read | *14* |
 
 #### Device
 
 | Token | Description | Example |
 |-------|-------------|---------|
-| `%b` | Battery level (number) | *73* |
+| `%b` | Battery level | *73%* |
 | `%B` | Battery icon (dynamic) | Changes with charge level |
 | `%W` | Wi-Fi icon (dynamic) | Changes with connection status |
 | `%m` | RAM usage | *33%* |
@@ -135,7 +135,7 @@ Italic uses NotoSans-Italic / NotoSerif-Italic font variants. Font and size defa
 
 - Tap a **line entry** in a position's submenu to edit it
 - Tap **Add line** to add a new line to the position
-- **Long-press** a line entry to remove it
+- **Long-press** a line entry for options: **Move up**, **Move down**, or **Delete**
 - Saving an empty line automatically removes it
 
 ### Smart ellipsis
@@ -186,13 +186,13 @@ Line 1: %s pages in %R
 
 **Status corner** (top-right):
 ```
-Line 1: %B %b%  %k
+Line 1: %B %b  %k
 ```
 
 **Chapter progress** (bottom-right):
 ```
 Line 1: %C
-Line 2: %g / %G (%P%)
+Line 2: %g / %G (%P)
 ```
 
 ---

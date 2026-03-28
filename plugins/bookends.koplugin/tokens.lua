@@ -35,7 +35,7 @@ function Tokens.expand(format_str, ui, session_start_time, session_pages_read, p
     -- Book percentage
     local percent = ""
     if type(currentpage) == "number" and type(totalpages) == "number" and totalpages > 0 then
-        percent = math.floor(currentpage / totalpages * 100)
+        percent = math.floor(currentpage / totalpages * 100) .. "%"
     end
 
     -- Chapter progress
@@ -50,7 +50,7 @@ function Tokens.expand(format_str, ui, session_start_time, session_pages_read, p
         if done and total and total > 0 then
             chapter_pages_done = done + 1 -- +1 to include current page
             chapter_total_pages = total
-            chapter_pct = math.floor(chapter_pages_done / total * 100)
+            chapter_pct = math.floor(chapter_pages_done / total * 100) .. "%"
         end
         local left = ui.toc:getChapterPagesLeft(pageno)
         if left then
@@ -133,6 +133,7 @@ function Tokens.expand(format_str, ui, session_start_time, session_pages_read, p
     local batt_symbol = ""
     if batt_lvl then
         batt_symbol = powerd:getBatterySymbol(powerd:isCharged(), powerd:isCharging(), batt_lvl) or ""
+        batt_lvl = batt_lvl .. "%"
     else
         batt_lvl = ""
     end
