@@ -766,12 +766,20 @@ function Bookends:showFontPicker(current_face, on_select)
             end
         end,
     }
-    UIManager:show(menu)
+    local x = math.floor((Screen:getWidth() - menu.dimen.w) / 2)
+    local y = math.floor((Screen:getHeight() - menu.dimen.h) / 2)
+    UIManager:show(menu, nil, nil, x, y)
 end
 
 -- ─── Token picker ────────────────────────────────────────
 
 Bookends.TOKEN_CATALOG = {
+    { _("Metadata"), {
+        { "%T", _("Document title") },
+        { "%A", _("Author(s)") },
+        { "%S", _("Series with index") },
+        { "%C", _("Chapter title") },
+    }},
     { _("Page / Progress"), {
         { "%c", _("Current page number") },
         { "%t", _("Total pages") },
@@ -789,12 +797,6 @@ Bookends.TOKEN_CATALOG = {
         { "%K", _("24-hour clock") },
         { "%R", _("Session reading time") },
         { "%s", _("Session pages read") },
-    }},
-    { _("Metadata"), {
-        { "%T", _("Document title") },
-        { "%A", _("Author(s)") },
-        { "%S", _("Series with index") },
-        { "%C", _("Chapter title") },
     }},
     { _("Device"), {
         { "%b", _("Battery level (number)") },
@@ -837,7 +839,9 @@ function Bookends:showTokenPicker(on_select)
             end
         end,
     }
-    UIManager:show(menu)
+    local x = math.floor((Screen:getWidth() - menu.dimen.w) / 2)
+    local y = math.floor((Screen:getHeight() - menu.dimen.h) / 2)
+    UIManager:show(menu, nil, nil, x, y)
 end
 
 -- ─── Helpers ─────────────────────────────────────────────

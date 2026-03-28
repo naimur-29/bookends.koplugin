@@ -121,7 +121,9 @@ function IconPicker:show(on_select)
             end
         end,
     }
-    UIManager:show(menu)
+    local x = math.floor((Screen:getWidth() - menu.dimen.w) / 2)
+    local y = math.floor((Screen:getHeight() - menu.dimen.h) / 2)
+    UIManager:show(menu, nil, nil, x, y)
 end
 
 return IconPicker
