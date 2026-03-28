@@ -125,6 +125,14 @@ local function switchContext(path)
         fm.file_chooser:clearSortingCache()
     end
 
+    -- Invalidate SimpleUI's item cache if present. The cache keys don't
+    -- include collate, so items cached with the old collate (missing doc_props)
+    -- would be reused with the new collate, breaking metadata-based sorts.
+    local ok, fc_module = pcall(require, "sui_foldercovers")
+    if ok and fc_module and fc_module.invalidateCache then
+        fc_module.invalidateCache()
+    end
+
     _current_context = ctx
 end
 
@@ -135,9 +143,6 @@ function M.apply()
     _orig_goHome = FileChooser.goHome
     _orig_getCollate = FileChooser.getCollate
 
-    -- Patch getCollate to return override when active.
-    -- This is the cleanest approach: the global "collate" setting is never
-    -- modified, so there's nothing to save/restore for sort order.
     FileChooser.getCollate = function(self)
         local override_id = getActiveCollateOverride()
         if override_id then
