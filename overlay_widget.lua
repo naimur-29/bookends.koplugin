@@ -125,25 +125,10 @@ function OverlayWidget.buildTextWidget(text, line_configs, h_anchor, max_width)
     return mlw, max_w, total_h
 end
 
---- Measure the width of the widest line in a text string.
--- @param line_configs table: array of {face=, bold=} per line
-function OverlayWidget.measureTextWidth(text, line_configs)
-    local max_w = 0
-    local i = 0
-    for line in text:gmatch("([^\n]+)") do
-        i = i + 1
-        local cfg = line_configs[i] or line_configs[#line_configs] or { face = nil, bold = false }
-        local display_text = cfg.uppercase and line:upper() or line
-        local tw = TextWidget:new(textWidgetOpts{
-            text = display_text,
-            face = cfg.face,
-            bold = cfg.bold,
-        })
-        local w = tw:getSize().w
-        tw:free()
-        if w > max_w then max_w = w end
-    end
-    return max_w
+--- Build a widget with no truncation (for measurement), returning it for potential reuse.
+-- @return widget, width, height
+function OverlayWidget.buildAndMeasure(text, line_configs, h_anchor)
+    return OverlayWidget.buildTextWidget(text, line_configs, h_anchor, nil)
 end
 
 --- Calculate max_width for each position in a row, applying overlap prevention.

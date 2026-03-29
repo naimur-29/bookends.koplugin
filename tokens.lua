@@ -3,40 +3,71 @@ local datetime = require("datetime")
 
 local Tokens = {}
 
-function Tokens.expand(format_str, ui, session_start_time, session_pages_read, preview_mode)
+function Tokens.expand(format_str, ui, session_elapsed, session_pages_read, preview_mode)
     -- Fast path: no tokens
     if not format_str:find("%%") then
         return format_str
+    end
+
+    -- Preview mode: return descriptive labels
+    if preview_mode then
+        local preview = {
+            ["%c"] = "[page]", ["%t"] = "[total]", ["%p"] = "[%]",
+            ["%P"] = "[ch%]", ["%g"] = "[ch.read]", ["%G"] = "[ch.total]",
+            ["%l"] = "[ch.left]", ["%L"] = "[left]",
+            ["%h"] = "[ch.time]", ["%H"] = "[time]",
+            ["%k"] = "[12h]", ["%K"] = "[24h]",
+            ["%d"] = "[date]", ["%D"] = "[date.long]",
+            ["%n"] = "[dd/mm/yy]", ["%w"] = "[weekday]", ["%a"] = "[wkday]",
+            ["%R"] = "[session]", ["%s"] = "[pages]",
+            ["%T"] = "[title]", ["%A"] = "[author]",
+            ["%S"] = "[series]", ["%C"] = "[chapter]",
+            ["%b"] = "[batt]", ["%B"] = "[batt]", ["%W"] = "[wifi]",
+            ["%m"] = "[mem]",
+        }
+        return format_str:gsub("(%%%a)", preview)
+    end
+
+    -- Helper: check if any of the given tokens appear in the format string
+    local function needs(...)
+        for i = 1, select("#", ...) do
+            if format_str:find("%%" .. select(i, ...)) then
+                return true
+            end
+        end
+        return false
     end
 
     local pageno = ui.view.state.page
     local doc = ui.document
 
     -- Page numbers (respects hidden flows + pagemap)
-    local currentpage
-    if ui.pagemap and ui.pagemap:wantsPageLabels() then
-        currentpage = ui.pagemap:getCurrentPageLabel(true) or ""
-    elseif pageno and doc:hasHiddenFlows() then
-        currentpage = doc:getPageNumberInFlow(pageno)
-    else
-        currentpage = pageno or 0
-    end
-
-    local totalpages
-    if ui.pagemap and ui.pagemap:wantsPageLabels() then
-        totalpages = ui.pagemap:getLastPageLabel(true) or ""
-    elseif pageno and doc:hasHiddenFlows() then
-        local flow = doc:getPageFlow(pageno)
-        totalpages = doc:getTotalPagesInFlow(flow)
-    else
-        totalpages = doc:getPageCount()
-    end
-
-    -- Book percentage (always from raw page numbers)
+    local currentpage = ""
+    local totalpages = ""
     local percent = ""
-    local raw_total = doc:getPageCount()
-    if pageno and raw_total and raw_total > 0 then
-        percent = math.floor(pageno / raw_total * 100) .. "%"
+    local pages_left_book = ""
+    if needs("c", "t", "p", "L") then
+        if ui.pagemap and ui.pagemap:wantsPageLabels() then
+            currentpage = ui.pagemap:getCurrentPageLabel(true) or ""
+            totalpages = ui.pagemap:getLastPageLabel(true) or ""
+        elseif pageno and doc:hasHiddenFlows() then
+            currentpage = doc:getPageNumberInFlow(pageno)
+            local flow = doc:getPageFlow(pageno)
+            totalpages = doc:getTotalPagesInFlow(flow)
+        else
+            currentpage = pageno or 0
+            totalpages = doc:getPageCount()
+        end
+
+        local raw_total = doc:getPageCount()
+        if pageno and raw_total and raw_total > 0 then
+            percent = math.floor(pageno / raw_total * 100) .. "%"
+        end
+
+        if pageno then
+            local left = doc:getTotalPagesLeft(pageno)
+            if left then pages_left_book = left end
+        end
     end
 
     -- Chapter progress
@@ -45,125 +76,135 @@ function Tokens.expand(format_str, ui, session_start_time, session_pages_read, p
     local chapter_pages_left = ""
     local chapter_total_pages = ""
     local chapter_title = ""
-    if pageno and ui.toc then
+    if needs("P", "g", "G", "l", "C") and pageno and ui.toc then
         local done = ui.toc:getChapterPagesDone(pageno)
         local total = ui.toc:getChapterPageCount(pageno)
         if done and total and total > 0 then
-            chapter_pages_done = done + 1 -- +1 to include current page
+            chapter_pages_done = done + 1
             chapter_total_pages = total
             chapter_pct = math.floor(chapter_pages_done / total * 100) .. "%"
         end
         local left = ui.toc:getChapterPagesLeft(pageno)
-        if left then
-            chapter_pages_left = left
-        end
+        if left then chapter_pages_left = left end
         local title = ui.toc:getTocTitleByPage(pageno)
-        if title and title ~= "" then
-            chapter_title = title
-        end
+        if title and title ~= "" then chapter_title = title end
     end
 
-    -- Session pages read (high-water mark minus start)
+    -- Session pages read
     local session_pages = math.max(0, session_pages_read or 0)
-
-    -- Pages left in book
-    local pages_left_book = ""
-    if pageno then
-        local left = doc:getTotalPagesLeft(pageno)
-        if left then
-            pages_left_book = left
-        end
-    end
 
     -- Time left in chapter / document (via statistics plugin)
     local time_left_chapter = ""
     local time_left_doc = ""
-    if pageno and ui.statistics and ui.statistics.getTimeForPages then
-        local ch_left = ui.toc and ui.toc:getChapterPagesLeft(pageno, true)
-        if not ch_left then
-            ch_left = doc:getTotalPagesLeft(pageno)
-        end
-        if ch_left then
-            local result = ui.statistics:getTimeForPages(ch_left)
-            if result and result ~= "N/A" then
-                time_left_chapter = result
+    if needs("h", "H") and pageno and ui.statistics and ui.statistics.getTimeForPages then
+        if needs("h") then
+            local ch_left = ui.toc and ui.toc:getChapterPagesLeft(pageno, true)
+            if not ch_left then
+                ch_left = doc:getTotalPagesLeft(pageno)
+            end
+            if ch_left then
+                local result = ui.statistics:getTimeForPages(ch_left)
+                if result and result ~= "N/A" then time_left_chapter = result end
             end
         end
-        local doc_left = doc:getTotalPagesLeft(pageno)
-        if doc_left then
-            local result = ui.statistics:getTimeForPages(doc_left)
-            if result and result ~= "N/A" then
-                time_left_doc = result
+        if needs("H") then
+            local doc_left = doc:getTotalPagesLeft(pageno)
+            if doc_left then
+                local result = ui.statistics:getTimeForPages(doc_left)
+                if result and result ~= "N/A" then time_left_doc = result end
             end
         end
     end
 
     -- Clock
-    local time_12h = os.date("%I:%M %p"):gsub("^0", "") -- strip leading zero
-    local time_24h = os.date("%H:%M")
+    local time_12h = ""
+    local time_24h = ""
+    if needs("k") then
+        time_12h = os.date("%I:%M %p"):gsub("^0", "")
+    end
+    if needs("K") then
+        time_24h = os.date("%H:%M")
+    end
 
     -- Dates
-    local date_short = os.date("%d %b")          -- 28 Mar
-    local date_long = os.date("%d %B %Y")         -- 28 March 2026
-    local date_num = os.date("%d/%m/%Y")          -- 28/03/2026
-    local date_weekday = os.date("%A")            -- Friday
-    local date_weekday_short = os.date("%a")      -- Fri
+    local date_short = ""
+    local date_long = ""
+    local date_num = ""
+    local date_weekday = ""
+    local date_weekday_short = ""
+    if needs("d", "D", "n", "w", "a") then
+        if needs("d") then date_short = os.date("%d %b") end
+        if needs("D") then date_long = os.date("%d %B %Y") end
+        if needs("n") then date_num = os.date("%d/%m/%Y") end
+        if needs("w") then date_weekday = os.date("%A") end
+        if needs("a") then date_weekday_short = os.date("%a") end
+    end
 
     -- Session reading time
     local session_time = ""
-    if session_start_time then
-        local elapsed = os.time() - session_start_time
+    if needs("R") and session_elapsed then
         local user_duration_format = G_reader_settings:readSetting("duration_format", "classic")
-        session_time = datetime.secondsToClockDuration(user_duration_format, elapsed, true)
+        session_time = datetime.secondsToClockDuration(user_duration_format, session_elapsed, true)
     end
 
-    -- Document metadata — use ui.doc_props (enriched) with doc:getProps() as fallback
-    local doc_props = ui.doc_props or {}
-    local props = doc:getProps()
-    local title = doc_props.display_title or props.title or ""
-    local authors = doc_props.authors or props.authors or ""
-    local series = doc_props.series or props.series or ""
-    local series_index = doc_props.series_index or props.series_index
-    if series ~= "" and series_index then
-        series = series .. " #" .. series_index
+    -- Document metadata
+    local title = ""
+    local authors = ""
+    local series = ""
+    if needs("T", "A", "S") then
+        local doc_props = ui.doc_props or {}
+        local ok, props = pcall(doc.getProps, doc)
+        if not ok then props = {} end
+        title = doc_props.display_title or props.title or ""
+        authors = doc_props.authors or props.authors or ""
+        series = doc_props.series or props.series or ""
+        local series_index = doc_props.series_index or props.series_index
+        if series ~= "" and series_index then
+            series = series .. " #" .. series_index
+        end
     end
 
     -- Battery
-    local powerd = Device:getPowerDevice()
-    local batt_lvl = powerd:getCapacity()
+    local batt_lvl = ""
     local batt_symbol = ""
-    if batt_lvl then
-        batt_symbol = powerd:getBatterySymbol(powerd:isCharged(), powerd:isCharging(), batt_lvl) or ""
-        batt_lvl = batt_lvl .. "%"
-    else
-        batt_lvl = ""
-    end
-
-    -- Wi-Fi (dynamic icon)
-    local NetworkMgr = require("ui/network/manager")
-    local wifi_symbol
-    if NetworkMgr:isWifiOn() then
-        wifi_symbol = "\xEE\xB2\xA8" -- U+ECA8 wifi on
-    else
-        wifi_symbol = "\xEE\xB2\xA9" -- U+ECA9 wifi off
-    end
-
-    -- Memory usage (system-wide percentage used)
-    local mem_usage = ""
-    local meminfo = io.open("/proc/meminfo", "r")
-    if meminfo then
-        local total, available
-        for line in meminfo:lines() do
-            if line:match("^MemTotal:") then
-                total = tonumber(line:match("(%d+)"))
-            elseif line:match("^MemAvailable:") then
-                available = tonumber(line:match("(%d+)"))
-            end
-            if total and available then break end
+    if needs("b", "B") then
+        local powerd = Device:getPowerDevice()
+        local capacity = powerd:getCapacity()
+        if capacity then
+            batt_symbol = powerd:getBatterySymbol(powerd:isCharged(), powerd:isCharging(), capacity) or ""
+            batt_lvl = capacity .. "%"
         end
-        meminfo:close()
-        if total and available and total > 0 then
-            mem_usage = math.floor((total - available) / total * 100) .. "%"
+    end
+
+    -- Wi-Fi
+    local wifi_symbol = ""
+    if needs("W") then
+        local NetworkMgr = require("ui/network/manager")
+        if NetworkMgr:isWifiOn() then
+            wifi_symbol = "\xEE\xB2\xA8" -- U+ECA8 wifi on
+        else
+            wifi_symbol = "\xEE\xB2\xA9" -- U+ECA9 wifi off
+        end
+    end
+
+    -- Memory usage
+    local mem_usage = ""
+    if needs("m") then
+        local meminfo = io.open("/proc/meminfo", "r")
+        if meminfo then
+            local total, available
+            for line in meminfo:lines() do
+                if line:match("^MemTotal:") then
+                    total = tonumber(line:match("(%d+)"))
+                elseif line:match("^MemAvailable:") then
+                    available = tonumber(line:match("(%d+)"))
+                end
+                if total and available then break end
+            end
+            meminfo:close()
+            if total and available and total > 0 then
+                mem_usage = math.floor((total - available) / total * 100) .. "%"
+            end
         end
     end
 
@@ -200,28 +241,11 @@ function Tokens.expand(format_str, ui, session_start_time, session_pages_read, p
         ["%W"] = wifi_symbol,
         ["%m"] = tostring(mem_usage),
     }
-    if preview_mode then
-        -- In preview mode, always show descriptive labels instead of values
-        replace = {
-            ["%c"] = "[page]", ["%t"] = "[total]", ["%p"] = "[%]",
-            ["%P"] = "[ch%]", ["%g"] = "[ch.read]", ["%G"] = "[ch.total]",
-            ["%l"] = "[ch.left]", ["%L"] = "[left]",
-            ["%h"] = "[ch.time]", ["%H"] = "[time]",
-            ["%k"] = "[12h]", ["%K"] = "[24h]",
-            ["%d"] = "[date]", ["%D"] = "[date.long]",
-            ["%n"] = "[dd/mm/yy]", ["%w"] = "[weekday]", ["%a"] = "[wkday]",
-            ["%R"] = "[session]", ["%s"] = "[pages]",
-            ["%T"] = "[title]", ["%A"] = "[author]",
-            ["%S"] = "[series]", ["%C"] = "[chapter]",
-            ["%b"] = "[batt]", ["%B"] = "[batt]", ["%W"] = "[wifi]",
-            ["%m"] = "[mem]",
-        }
-    end
     return format_str:gsub("(%%%a)", replace)
 end
 
-function Tokens.expandPreview(format_str, ui, session_start_time, session_pages_read)
-    return Tokens.expand(format_str, ui, session_start_time, session_pages_read, true)
+function Tokens.expandPreview(format_str, ui, session_elapsed, session_pages_read)
+    return Tokens.expand(format_str, ui, session_elapsed, session_pages_read, true)
 end
 
 return Tokens

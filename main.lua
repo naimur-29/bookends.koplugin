@@ -3,11 +3,49 @@ local Font = require("ui/font")
 local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local _ = require("gettext")
+local T = require("ffi/util").template
 local Screen = Device.screen
 local Tokens = require("tokens")
 local OverlayWidget = require("overlay_widget")
 local InputDialog = require("ui/widget/inputdialog")
 local SpinWidget = require("ui/widget/spinwidget")
+local InfoMessage = require("ui/widget/infomessage")
+local ConfirmBox = require("ui/widget/confirmbox")
+local util = require("util")
+
+--- Remove an index from a sparse table, shifting higher indices down.
+-- Unlike table.remove, this works correctly when the table has gaps.
+local function sparseRemove(tbl, idx)
+    if not tbl then return end
+    -- Find the highest index
+    local max_idx = 0
+    for k in pairs(tbl) do
+        if type(k) == "number" and k > max_idx then max_idx = k end
+    end
+    -- Shift everything above idx down by one
+    for i = idx, max_idx do
+        tbl[i] = tbl[i + 1]
+    end
+end
+
+--- Truncate a string to max_bytes, avoiding splitting multi-byte UTF-8 characters.
+local function truncateUtf8(str, max_bytes)
+    if #str <= max_bytes then return str end
+    local pos = 0
+    local i = 1
+    while i <= max_bytes do
+        local b = str:byte(i)
+        local char_len
+        if b < 0x80 then char_len = 1
+        elseif b < 0xE0 then char_len = 2
+        elseif b < 0xF0 then char_len = 3
+        else char_len = 4 end
+        if i + char_len - 1 > max_bytes then break end
+        pos = i + char_len - 1
+        i = i + char_len
+    end
+    return str:sub(1, pos) .. "..."
+end
 
 local Bookends = WidgetContainer:extend{
     name = "bookends",
@@ -28,7 +66,8 @@ function Bookends:init()
     self:loadSettings()
     self.ui.menu:registerToMainMenu(self)
     self.ui.view:registerViewModule("bookends", self)
-    self.session_start_time = os.time()
+    self.session_elapsed = 0
+    self.session_resume_time = os.time()
     self.session_start_page = nil -- raw page, set on first onPageUpdate
     self.session_max_page = nil   -- highest raw page reached
     self.dirty = true
@@ -90,7 +129,7 @@ function Bookends:loadSettings()
 end
 
 function Bookends:buildPreset()
-    local util = require("util")
+
     local preset = {
         enabled = self.enabled,
         defaults = util.tableDeepCopy(self.defaults),
@@ -103,7 +142,7 @@ function Bookends:buildPreset()
 end
 
 function Bookends:loadPreset(preset)
-    local util = require("util")
+
     if preset.enabled ~= nil then
         self.enabled = preset.enabled
         G_reader_settings:saveSetting("bookends_enabled", self.enabled)
@@ -142,7 +181,7 @@ function Bookends:getPositionSetting(key, field)
 end
 
 function Bookends:isPositionActive(key)
-    return self.enabled and #self.positions[key].lines > 0
+    return self.enabled and #self.positions[key].lines > 0 and not self.positions[key].disabled
 end
 
 function Bookends:markDirty()
@@ -202,7 +241,23 @@ end
 function Bookends:onPosUpdate() self:markDirty() end
 function Bookends:onReaderFooterVisibilityChange() self:markDirty() end
 function Bookends:onSetDimensions() self:markDirty() end
-function Bookends:onResume() self:markDirty() end
+function Bookends:getSessionElapsed()
+    local elapsed = self.session_elapsed or 0
+    if self.session_resume_time then
+        elapsed = elapsed + (os.time() - self.session_resume_time)
+    end
+    return elapsed
+end
+function Bookends:onSuspend()
+    self:stopRefreshTimer()
+end
+function Bookends:onResume()
+    -- Each wake from suspend starts a new reading session
+    self.session_elapsed = 0
+    self.session_resume_time = os.time()
+    self.session_start_page = self.session_max_page
+    self:markDirty()
+end
 
 function Bookends:paintTo(bb, x, y)
     if not self.enabled then return end
@@ -218,7 +273,7 @@ function Bookends:paintTo(bb, x, y)
         if self:isPositionActive(pos.key) then
             local lines = self.positions[pos.key].lines
             local joined = table.concat(lines, "\n")
-            expanded[pos.key] = Tokens.expand(joined, self.ui, self.session_start_time, math.max(0, (self.session_max_page or 0) - (self.session_start_page or 0)))
+            expanded[pos.key] = Tokens.expand(joined, self.ui, self:getSessionElapsed(), math.max(0, (self.session_max_page or 0) - (self.session_start_page or 0)))
         end
     end
 
@@ -250,15 +305,13 @@ function Bookends:paintTo(bb, x, y)
         end
     end
 
-    -- Phase 2: Build per-line rendering configs and measure
-    local measurements = {}
+    -- Phase 2: Build per-line rendering configs and build widgets for measurement
+    local pre_built = {} -- key -> { widget, w, h, line_configs, pos_def }
     for key, text in pairs(expanded) do
         local pos_settings = self.positions[key]
         local default_face_name = self:getPositionSetting(key, "font_face")
         local default_font_size = self:getPositionSetting(key, "font_size")
-        local default_bold = self:getPositionSetting(key, "font_bold")
 
-        -- Build per-line config: { {face=, bold=, v_nudge=, h_nudge=}, ... }
         local line_configs = {}
         for i = 1, #pos_settings.lines do
             local face_name = (pos_settings.line_font_face and pos_settings.line_font_face[i])
@@ -274,8 +327,14 @@ function Bookends:paintTo(bb, x, y)
             table.insert(line_configs, cfg)
         end
 
-        local w = OverlayWidget.measureTextWidth(text, line_configs)
-        measurements[key] = { width = w, line_configs = line_configs }
+        local pos_def
+        for _, p in ipairs(self.POSITIONS) do
+            if p.key == key then pos_def = p; break end
+        end
+
+        -- Build without truncation to measure natural width
+        local widget, w, h = OverlayWidget.buildTextWidget(text, line_configs, pos_def.h_anchor, nil)
+        pre_built[key] = { widget = widget, w = w, h = h, line_configs = line_configs, pos_def = pos_def }
     end
 
     -- Phase 3: Calculate overlap limits per row
@@ -291,9 +350,9 @@ function Bookends:paintTo(bb, x, y)
         local center_key = row == "top" and "tc" or "bc"
         local right_key = row == "top" and "tr" or "br"
 
-        local left_w = measurements[left_key] and measurements[left_key].width or nil
-        local center_w = measurements[center_key] and measurements[center_key].width or nil
-        local right_w = measurements[right_key] and measurements[right_key].width or nil
+        local left_w = pre_built[left_key] and pre_built[left_key].w or nil
+        local center_w = pre_built[center_key] and pre_built[center_key].w or nil
+        local right_w = pre_built[right_key] and pre_built[right_key].w or nil
 
         local left_h_offset = self:getPositionSetting(left_key, "h_offset")
         local right_h_offset = self:getPositionSetting(right_key, "h_offset")
@@ -303,7 +362,7 @@ function Bookends:paintTo(bb, x, y)
             left_w, center_w, right_w, screen_w, gap, max_h_offset,
             self.defaults.truncation_priority)
 
-        -- Phase 4: Build widgets with truncation limits
+        -- Phase 4: Reuse pre-built widgets or rebuild with truncation
         local row_keys = {
             { key = left_key, limit_key = "left" },
             { key = center_key, limit_key = "center" },
@@ -311,27 +370,31 @@ function Bookends:paintTo(bb, x, y)
         }
         for _, rk in ipairs(row_keys) do
             local key = rk.key
-            if expanded[key] then
-                local m = measurements[key]
-                local pos_def
-                for _, p in ipairs(self.POSITIONS) do
-                    if p.key == key then pos_def = p; break end
-                end
-
+            local pb = pre_built[key]
+            if pb then
                 local max_width = limits[rk.limit_key]
-                local widget, w, h = OverlayWidget.buildTextWidget(
-                    expanded[key], m.line_configs, pos_def.h_anchor, max_width)
+                local widget, w, h
+
+                if max_width then
+                    -- Truncation needed: free pre-built widget and rebuild with limit
+                    if pb.widget and pb.widget.free then pb.widget:free() end
+                    widget, w, h = OverlayWidget.buildTextWidget(
+                        expanded[key], pb.line_configs, pb.pos_def.h_anchor, max_width)
+                else
+                    -- No truncation: reuse pre-built widget
+                    widget, w, h = pb.widget, pb.w, pb.h
+                end
 
                 if widget then
                     local v_off = self:getPositionSetting(key, "v_offset")
                     local h_off = self:getPositionSetting(key, "h_offset")
                     local px, py = OverlayWidget.computeCoordinates(
-                        pos_def.h_anchor, pos_def.v_anchor,
+                        pb.pos_def.h_anchor, pb.pos_def.v_anchor,
                         w, h, screen_w, screen_h, v_off, h_off)
 
                     -- Apply first line's nudge for single-line widgets
                     -- (MultiLineWidget handles per-line nudges internally)
-                    local cfg1 = m.line_configs[1]
+                    local cfg1 = pb.line_configs[1]
                     if cfg1 and not widget.lines then -- not a MultiLineWidget
                         px = px + (cfg1.h_nudge or 0)
                         py = py + (cfg1.v_nudge or 0)
@@ -339,6 +402,9 @@ function Bookends:paintTo(bb, x, y)
 
                     self.widget_cache[key] = { widget = widget, x = px, y = py }
                     widget:paintTo(bb, x + px, y + py)
+                else
+                    -- Widget wasn't used (truncated to zero); free it
+                    if pb.widget and pb.widget.free then pb.widget:free() end
                 end
             end
         end
@@ -349,13 +415,34 @@ function Bookends:paintTo(bb, x, y)
         self.position_cache[key] = text
     end
     self.dirty = false
+    self:startRefreshTimer()
 end
 
 function Bookends:onCloseWidget()
+    self:stopRefreshTimer()
     if self.widget_cache then
         OverlayWidget.freeWidgets(self.widget_cache)
         self.widget_cache = nil
     end
+end
+
+function Bookends:startRefreshTimer()
+    if self.refresh_timer_active then return end
+    self.refresh_timer_active = true
+    self.refresh_timer_func = function()
+        if not self.refresh_timer_active then return end
+        self:markDirty()
+        UIManager:scheduleIn(60, self.refresh_timer_func)
+    end
+    UIManager:scheduleIn(60, self.refresh_timer_func)
+end
+
+function Bookends:stopRefreshTimer()
+    if self.refresh_timer_func then
+        UIManager:unschedule(self.refresh_timer_func)
+    end
+    self.refresh_timer_active = false
+    self.refresh_timer_func = nil
 end
 
 -- ─── Menu ────────────────────────────────────────────────
@@ -390,19 +477,30 @@ function Bookends:buildMainMenu()
                 local lines = self.positions[pos.key].lines
                 if #lines == 0 then
                     return pos.label
-                else
-                    -- Expand tokens for preview
-                    local preview = Tokens.expandPreview(lines[1], self.ui, self.session_start_time, math.max(0, (self.session_max_page or 0) - (self.session_start_page or 0)))
-                    if #lines > 1 then
-                        preview = preview .. " ..."
-                    end
-                    if #preview > 40 then
-                        preview = preview:sub(1, 37) .. "..."
-                    end
-                    return pos.label .. ": " .. preview
                 end
+                local session_elapsed = self:getSessionElapsed()
+                local session_pages = math.max(0, (self.session_max_page or 0) - (self.session_start_page or 0))
+                local previews = {}
+                for _, line in ipairs(lines) do
+                    table.insert(previews, (Tokens.expandPreview(line, self.ui, session_elapsed, session_pages)))
+                end
+                local preview = table.concat(previews, " \xC2\xB7 ")
+                if #preview > 38 then
+                    preview = truncateUtf8(preview, 35)
+                end
+                return pos.label .. " \xE2\x80\x94 " .. preview
             end,
             enabled_func = function() return self.enabled end,
+            checked_func = function()
+                return #self.positions[pos.key].lines > 0 and not self.positions[pos.key].disabled
+            end,
+            hold_callback = function(touchmenu_instance)
+                if #self.positions[pos.key].lines == 0 then return end
+                self.positions[pos.key].disabled = not self.positions[pos.key].disabled or nil
+                self:savePositionSetting(pos.key)
+                self:markDirty()
+                if touchmenu_instance then touchmenu_instance:updateItems() end
+            end,
             sub_item_table_func = function()
                 return self:buildPositionMenu(pos)
             end,
@@ -421,9 +519,9 @@ function Bookends:buildMainMenu()
         end,
     })
 
-    -- Defaults submenu
+    -- Settings submenu
     table.insert(menu, {
-        text = _("Defaults"),
+        text = _("Settings"),
         enabled_func = function() return self.enabled end,
         sub_item_table_func = function()
             return {
@@ -500,6 +598,14 @@ function Bookends:buildMainMenu()
                         G_reader_settings:saveSetting("bookends_truncation_priority", self.defaults.truncation_priority)
                         self:markDirty()
                     end,
+                    separator = true,
+                },
+                {
+                    text = _("Check for updates"),
+                    keep_menu_open = true,
+                    callback = function()
+                        self:checkForUpdates()
+                    end,
                 },
             }
         end,
@@ -513,13 +619,29 @@ function Bookends:buildPositionMenu(pos)
     local menu = {}
     local lines = self.positions[pos.key].lines
 
+    -- Enable/disable toggle (only shown when position has lines)
+    if #lines > 0 then
+        table.insert(menu, {
+            text = _("Enabled"),
+            checked_func = function()
+                return not self.positions[pos.key].disabled
+            end,
+            callback = function()
+                self.positions[pos.key].disabled = not self.positions[pos.key].disabled or nil
+                self:savePositionSetting(pos.key)
+                self:markDirty()
+            end,
+            separator = true,
+        })
+    end
+
     -- Line entries (no keep_menu_open so menu refreshes after editing)
     for i, line in ipairs(lines) do
         table.insert(menu, {
             text_func = function()
-                local preview = Tokens.expandPreview(self.positions[pos.key].lines[i] or "", self.ui, self.session_start_time, math.max(0, (self.session_max_page or 0) - (self.session_start_page or 0)))
+                local preview = Tokens.expandPreview(self.positions[pos.key].lines[i] or "", self.ui, self:getSessionElapsed(), math.max(0, (self.session_max_page or 0) - (self.session_start_page or 0)))
                 if #preview > 45 then
-                    preview = preview:sub(1, 42) .. "..."
+                    preview = truncateUtf8(preview, 42)
                 end
                 return _("Line") .. " " .. i .. ": " .. preview
             end,
@@ -534,7 +656,7 @@ function Bookends:buildPositionMenu(pos)
 
     -- Add line
     table.insert(menu, {
-        text = "+ " .. _("Add line"),
+        text = "+ " .. _("Add line") .. "  (" .. _("long press lines to manage") .. ")",
         callback = function()
             local idx = #self.positions[pos.key].lines + 1
             table.insert(self.positions[pos.key].lines, "")
@@ -697,8 +819,8 @@ Bookends.BUILT_IN_PRESETS = {
 
 function Bookends:buildPresetsMenu()
     local Presets = require("ui/presets")
-    local InfoMessage = require("ui/widget/infomessage")
-    local T = require("ffi/util").template
+
+
 
     -- Start with the standard user preset menu
     local items = Presets.genPresetMenuItemTable(self.preset_obj)
@@ -732,7 +854,7 @@ function Bookends:buildPresetsMenu()
     -- Add separator before user presets if there are any
     if #self.preset_obj.presets > 0 or next(self.preset_obj.presets) then
         table.insert(items, 2 + #builtin_items, {
-            text = "\xE2\x94\x80\xE2\x94\x80 " .. _("Your presets") .. " \xE2\x94\x80\xE2\x94\x80",
+            text = "\xE2\x94\x80\xE2\x94\x80 " .. _("Your presets") .. " (" .. _("long press to edit") .. ") \xE2\x94\x80\xE2\x94\x80",
             enabled_func = function() return false end,
         })
     end
@@ -744,7 +866,7 @@ end
 
 function Bookends:editLineString(pos, line_idx)
     local IconPicker = require("icon_picker")
-    local util = require("util")
+
     local pos_settings = self.positions[pos.key]
 
     local current_text = pos_settings.lines[line_idx] or ""
@@ -775,7 +897,6 @@ function Bookends:editLineString(pos, line_idx)
         pos_settings.line_v_nudge[line_idx] = line_v_nudge ~= 0 and line_v_nudge or nil
         pos_settings.line_h_nudge[line_idx] = line_h_nudge ~= 0 and line_h_nudge or nil
         pos_settings.line_uppercase[line_idx] = line_uppercase or nil
-        self:savePositionSetting(pos.key)
         self:markDirty()
     end
 
@@ -923,7 +1044,6 @@ function Bookends:editLineString(pos, line_idx)
             local live_text = format_dialog:getInputText()
             if live_text and live_text ~= "" then
                 pos_settings.lines[line_idx] = live_text
-                self:savePositionSetting(pos.key)
                 self:markDirty()
             end
         end,
@@ -938,9 +1058,7 @@ function Bookends:editLineString(pos, line_idx)
                     text = _("Cancel"),
                     callback = function()
                         -- Restore all original settings
-                        for k, v in pairs(original_settings) do
-                            pos_settings[k] = v
-                        end
+                        self.positions[pos.key] = util.tableDeepCopy(original_settings)
                         self:savePositionSetting(pos.key)
                         UIManager:close(format_dialog)
                         self:markDirty()
@@ -972,12 +1090,12 @@ function Bookends:editLineString(pos, line_idx)
                         if new_text == "" then
                             -- Empty text: remove the line entirely
                             table.remove(pos_settings.lines, line_idx)
-                            if pos_settings.line_style then table.remove(pos_settings.line_style, line_idx) end
-                            if pos_settings.line_font_size then table.remove(pos_settings.line_font_size, line_idx) end
-                            if pos_settings.line_font_face then table.remove(pos_settings.line_font_face, line_idx) end
-                            if pos_settings.line_v_nudge then table.remove(pos_settings.line_v_nudge, line_idx) end
-                            if pos_settings.line_h_nudge then table.remove(pos_settings.line_h_nudge, line_idx) end
-                            if pos_settings.line_uppercase then table.remove(pos_settings.line_uppercase, line_idx) end
+                            sparseRemove(pos_settings.line_style, line_idx)
+                            sparseRemove(pos_settings.line_font_size, line_idx)
+                            sparseRemove(pos_settings.line_font_face, line_idx)
+                            sparseRemove(pos_settings.line_v_nudge, line_idx)
+                            sparseRemove(pos_settings.line_h_nudge, line_idx)
+                            sparseRemove(pos_settings.line_uppercase, line_idx)
                         else
                             -- Save the text (style/font/nudge already applied via live preview)
                             pos_settings.lines[line_idx] = new_text
@@ -996,10 +1114,10 @@ function Bookends:editLineString(pos, line_idx)
 end
 
 function Bookends:showLineManageDialog(pos, line_idx, touchmenu_instance)
-    local ConfirmBox = require("ui/widget/confirmbox")
+
     local ps = self.positions[pos.key]
     local num_lines = #ps.lines
-    local T = require("ffi/util").template
+
 
     local function refreshMenu()
         if touchmenu_instance then
@@ -1010,12 +1128,12 @@ function Bookends:showLineManageDialog(pos, line_idx, touchmenu_instance)
 
     local function removeLine()
         table.remove(ps.lines, line_idx)
-        if ps.line_style then table.remove(ps.line_style, line_idx) end
-        if ps.line_font_size then table.remove(ps.line_font_size, line_idx) end
-        if ps.line_font_face then table.remove(ps.line_font_face, line_idx) end
-        if ps.line_v_nudge then table.remove(ps.line_v_nudge, line_idx) end
-        if ps.line_h_nudge then table.remove(ps.line_h_nudge, line_idx) end
-        if ps.line_uppercase then table.remove(ps.line_uppercase, line_idx) end
+        sparseRemove(ps.line_style, line_idx)
+        sparseRemove(ps.line_font_size, line_idx)
+        sparseRemove(ps.line_font_face, line_idx)
+        sparseRemove(ps.line_v_nudge, line_idx)
+        sparseRemove(ps.line_h_nudge, line_idx)
+        sparseRemove(ps.line_uppercase, line_idx)
         self:savePositionSetting(pos.key)
         self:markDirty()
         refreshMenu()
@@ -1267,6 +1385,236 @@ function Bookends:buildFontMenu(get_current, on_select)
         end
     end
     return menu
+end
+
+function Bookends:checkForUpdates()
+
+    local DataStorage = require("datastorage")
+    local meta = dofile("plugins/bookends.koplugin/_meta.lua")
+    local installed_version = meta and meta.version or "unknown"
+
+    local NetworkMgr = require("ui/network/manager")
+    if not NetworkMgr:isWifiOn() then
+        UIManager:show(InfoMessage:new{
+            text = _("Wi-Fi is not enabled."),
+            timeout = 3,
+        })
+        return
+    end
+
+    UIManager:show(InfoMessage:new{
+        text = _("Checking for updates..."),
+        timeout = 1,
+    })
+
+    UIManager:scheduleIn(0.1, function()
+        local http = require("socket/http")
+        local ltn12 = require("ltn12")
+        local socket = require("socket")
+        local socketutil = require("socketutil")
+        local json = require("json")
+
+        local function githubGet(url)
+            local body = {}
+            socketutil:set_timeout(socketutil.LARGE_BLOCK_TIMEOUT, socketutil.LARGE_TOTAL_TIMEOUT)
+            local code = socket.skip(1, http.request({
+                url = url,
+                method = "GET",
+                headers = {
+                    ["User-Agent"] = "KOReader-Bookends/" .. installed_version,
+                    ["Accept"] = "application/vnd.github.v3+json",
+                },
+                sink = ltn12.sink.table(body),
+                redirect = true,
+            }))
+            socketutil:reset_timeout()
+            if code ~= 200 then return nil end
+            local ok, data = pcall(json.decode, table.concat(body))
+            return ok and data or nil
+        end
+
+        local function parseVersion(v)
+            local parts = {}
+            for part in tostring(v):gsub("^v", ""):gmatch("([^.]+)") do
+                table.insert(parts, tonumber(part) or 0)
+            end
+            return parts
+        end
+        local function isNewer(v1, v2)
+            local a, b = parseVersion(v1), parseVersion(v2)
+            for i = 1, math.max(#a, #b) do
+                local x, y = a[i] or 0, b[i] or 0
+                if x > y then return true end
+                if x < y then return false end
+            end
+            return false
+        end
+
+        -- Fetch all releases to gather notes between installed and latest
+        local releases = githubGet("https://api.github.com/repos/AndyHazz/bookends.koplugin/releases")
+        if not releases or #releases == 0 then
+            UIManager:show(InfoMessage:new{
+                text = _("Could not check for updates."),
+                timeout = 3,
+            })
+            return
+        end
+
+        -- Collect releases newer than installed version
+        local new_releases = {}
+        local latest_zip_url
+        for _, rel in ipairs(releases) do
+            if rel.draft or rel.prerelease then goto continue end
+            local ver = rel.tag_name:gsub("^v", "")
+            if isNewer(ver, installed_version) then
+                table.insert(new_releases, rel)
+                -- Find ZIP asset from the newest release
+                if not latest_zip_url and rel.assets then
+                    for _, asset in ipairs(rel.assets) do
+                        if asset.name:match("%.zip$") then
+                            latest_zip_url = asset.browser_download_url
+                            break
+                        end
+                    end
+                end
+            end
+            ::continue::
+        end
+
+        if #new_releases == 0 then
+            UIManager:show(InfoMessage:new{
+                text = _("Bookends is up to date.") .. "\n\n" ..
+                    _("Version: ") .. "v" .. installed_version,
+                timeout = 3,
+            })
+            return
+        end
+
+        -- Build combined release notes (newest first)
+        local latest_version = new_releases[1].tag_name:gsub("^v", "")
+        local notes = {}
+        for _, rel in ipairs(new_releases) do
+            local header = "v" .. rel.tag_name:gsub("^v", "")
+            local body = rel.body or ""
+            table.insert(notes, header .. "\n" .. body)
+        end
+        local all_notes = table.concat(notes, "\n\n")
+
+        local TextViewer = require("ui/widget/textviewer")
+        local viewer
+        local buttons = {
+            {
+                {
+                    text = _("Close"),
+                    callback = function()
+                        UIManager:close(viewer)
+                    end,
+                },
+                {
+                    text = _("Update and restart"),
+                    callback = function()
+                        UIManager:close(viewer)
+                        if not latest_zip_url then
+                            UIManager:show(InfoMessage:new{
+                                text = _("No download available for this release."),
+                                timeout = 3,
+                            })
+                            return
+                        end
+                        self:installUpdate(latest_zip_url, installed_version, latest_version)
+                    end,
+                },
+            },
+        }
+        viewer = TextViewer:new{
+            title = _("Update available!"),
+            text = _("Installed: ") .. "v" .. installed_version .. "\n" ..
+                _("Latest: ") .. "v" .. latest_version .. "\n\n" ..
+                all_notes,
+            buttons_table = buttons,
+            add_default_buttons = false,
+        }
+        UIManager:show(viewer)
+    end)
+end
+
+function Bookends:installUpdate(zip_url, old_version, new_version)
+
+    local DataStorage = require("datastorage")
+    local lfs = require("libs/libkoreader-lfs")
+
+    UIManager:show(InfoMessage:new{
+        text = _("Downloading update..."),
+        timeout = 1,
+    })
+
+    UIManager:scheduleIn(0.1, function()
+        local http = require("socket/http")
+        local ltn12 = require("ltn12")
+        local socket = require("socket")
+        local socketutil = require("socketutil")
+
+        -- Download ZIP to temp location
+        local cache_dir = DataStorage:getSettingsDir() .. "/bookends_cache"
+        if lfs.attributes(cache_dir, "mode") ~= "directory" then
+            lfs.mkdir(cache_dir)
+        end
+        local zip_path = cache_dir .. "/bookends.koplugin.zip"
+
+        local file = io.open(zip_path, "wb")
+        if not file then
+            UIManager:show(InfoMessage:new{
+                text = _("Could not save download."),
+                timeout = 3,
+            })
+            return
+        end
+
+        socketutil:set_timeout(socketutil.FILE_BLOCK_TIMEOUT, socketutil.FILE_TOTAL_TIMEOUT)
+        local code = socket.skip(1, http.request({
+            url = zip_url,
+            method = "GET",
+            headers = {
+                ["User-Agent"] = "KOReader-Bookends/" .. old_version,
+            },
+            sink = ltn12.sink.file(file),
+            redirect = true,
+        }))
+        socketutil:reset_timeout()
+
+        if code ~= 200 then
+            pcall(os.remove, zip_path)
+            UIManager:show(InfoMessage:new{
+                text = _("Download failed."),
+                timeout = 3,
+            })
+            return
+        end
+
+        -- Extract to plugin directory (strip root folder from ZIP)
+        local plugin_path = DataStorage:getDataDir() .. "/plugins/bookends.koplugin"
+        local ok, err = Device:unpackArchive(zip_path, plugin_path, true)
+        pcall(os.remove, zip_path)
+
+        if not ok then
+            UIManager:show(InfoMessage:new{
+                text = _("Installation failed: ") .. tostring(err),
+                timeout = 5,
+            })
+            return
+        end
+
+        -- Restart KOReader to load the new version
+    
+        UIManager:show(ConfirmBox:new{
+            text = _("Bookends updated to v") .. new_version .. ".\n\n" ..
+                _("Restart KOReader now?"),
+            ok_text = _("Restart"),
+            ok_callback = function()
+                UIManager:restartKOReader()
+            end,
+        })
+    end)
 end
 
 function Bookends:showSpinner(title, value, min, max, default, on_set)
