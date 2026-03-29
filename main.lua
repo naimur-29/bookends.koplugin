@@ -526,7 +526,10 @@ function Bookends:buildMainMenu()
         sub_item_table_func = function()
             return {
                 {
-                    text = _("Default font"),
+                    text_func = function()
+                        local name = self.defaults.font_face:match("([^/]+)$"):gsub("%.%w+$", "")
+                        return _("Default font") .. " (" .. name .. ")"
+                    end,
                     sub_item_table = self:buildFontMenu(function() return self.defaults.font_face end,
                         function(face)
                             self.defaults.font_face = face
@@ -535,51 +538,63 @@ function Bookends:buildMainMenu()
                         end),
                 },
                 {
-                    text = _("Default font size"),
+                    text_func = function()
+                        return _("Default font size") .. " (" .. self.defaults.font_size .. ")"
+                    end,
                     keep_menu_open = true,
-                    callback = function()
+                    callback = function(touchmenu_instance)
                         self:showSpinner(_("Default font size"), self.defaults.font_size, 8, 36,
                             self.ui.view.footer.settings.text_font_size,
                             function(val)
                                 self.defaults.font_size = val
                                 G_reader_settings:saveSetting("bookends_font_size", val)
                                 self:markDirty()
+                                if touchmenu_instance then touchmenu_instance:updateItems() end
                             end)
                     end,
                 },
                 {
-                    text = _("Default vertical offset"),
+                    text_func = function()
+                        return _("Default vertical offset") .. " (" .. self.defaults.v_offset .. ")"
+                    end,
                     keep_menu_open = true,
-                    callback = function()
+                    callback = function(touchmenu_instance)
                         self:showSpinner(_("Default vertical offset (px)"), self.defaults.v_offset, 0, 999, 35,
                             function(val)
                                 self.defaults.v_offset = val
                                 G_reader_settings:saveSetting("bookends_v_offset", val)
                                 self:markDirty()
+                                if touchmenu_instance then touchmenu_instance:updateItems() end
                             end)
                     end,
                 },
                 {
-                    text = _("Default horizontal offset"),
+                    text_func = function()
+                        return _("Default horizontal offset") .. " (" .. self.defaults.h_offset .. ")"
+                    end,
                     keep_menu_open = true,
-                    callback = function()
+                    callback = function(touchmenu_instance)
                         self:showSpinner(_("Default horizontal offset (px)"), self.defaults.h_offset, 0, 999, 18,
                             function(val)
                                 self.defaults.h_offset = val
                                 G_reader_settings:saveSetting("bookends_h_offset", val)
                                 self:markDirty()
+                                if touchmenu_instance then touchmenu_instance:updateItems() end
                             end)
                     end,
                 },
                 {
-                    text = _("Overlap gap"),
+                    text_func = function()
+                        return _("Overlap gap") .. " (" .. self.defaults.overlap_gap .. ")"
+                    end,
                     keep_menu_open = true,
-                    callback = function()
+                    callback = function(touchmenu_instance)
                         self:showSpinner(_("Minimum gap between texts (px)"), self.defaults.overlap_gap, 0, 999, 50,
                             function(val)
                                 self.defaults.overlap_gap = val
                                 G_reader_settings:saveSetting("bookends_overlap_gap", val)
                                 self:markDirty()
+                                if touchmenu_instance then touchmenu_instance:updateItems() end
                             end)
                     end,
                 },
@@ -675,7 +690,7 @@ function Bookends:buildPositionMenu(pos)
             return _("Override vertical offset")
         end,
         keep_menu_open = true,
-        callback = function()
+        callback = function(touchmenu_instance)
             self:showSpinner(_("Vertical offset for " .. pos.label),
                 self:getPositionSetting(pos.key, "v_offset"), 0, 999,
                 self.defaults.v_offset,
@@ -683,6 +698,7 @@ function Bookends:buildPositionMenu(pos)
                     self.positions[pos.key].v_offset = val
                     self:savePositionSetting(pos.key)
                     self:markDirty()
+                    if touchmenu_instance then touchmenu_instance:updateItems() end
                 end)
         end,
     })
@@ -696,7 +712,7 @@ function Bookends:buildPositionMenu(pos)
                 return _("Override horizontal offset")
             end,
             keep_menu_open = true,
-            callback = function()
+            callback = function(touchmenu_instance)
                 self:showSpinner(_("Horizontal offset for " .. pos.label),
                     self:getPositionSetting(pos.key, "h_offset"), 0, 999,
                     self.defaults.h_offset,
@@ -704,6 +720,7 @@ function Bookends:buildPositionMenu(pos)
                         self.positions[pos.key].h_offset = val
                         self:savePositionSetting(pos.key)
                         self:markDirty()
+                        if touchmenu_instance then touchmenu_instance:updateItems() end
                     end)
             end,
         })
@@ -1492,10 +1509,17 @@ function Bookends:checkForUpdates()
 
         -- Build combined release notes (newest first)
         local latest_version = new_releases[1].tag_name:gsub("^v", "")
+        local function stripMarkdown(text)
+            text = text:gsub("#+%s*", "")        -- strip heading markers
+            text = text:gsub("%*%*(.-)%*%*", "%1") -- strip bold
+            text = text:gsub("%*(.-)%*", "%1")     -- strip italic
+            text = text:gsub("`(.-)`", "%1")       -- strip inline code
+            return text
+        end
         local notes = {}
         for _, rel in ipairs(new_releases) do
             local header = "v" .. rel.tag_name:gsub("^v", "")
-            local body = rel.body or ""
+            local body = stripMarkdown(rel.body or "")
             table.insert(notes, header .. "\n" .. body)
         end
         local all_notes = table.concat(notes, "\n\n")
