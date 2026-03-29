@@ -485,8 +485,7 @@ function Bookends:buildMainMenu()
         text = _("Presets"),
         enabled_func = function() return self.enabled end,
         sub_item_table_func = function()
-            local Presets = require("ui/presets")
-            return Presets.genPresetMenuItemTable(self.preset_obj)
+            return self:buildPresetsMenu()
         end,
     })
 
@@ -588,6 +587,112 @@ function Bookends:buildPositionMenu(pos)
     })
 
     return menu
+end
+
+-- ─── Presets ─────────────────────────────────────────────
+
+Bookends.BUILT_IN_PRESETS = {
+    {
+        name = _("Minimal"),
+        preset = {
+            enabled = true,
+            positions = {
+                tl = { lines = {} },
+                tc = { lines = {} },
+                tr = { lines = {} },
+                bl = { lines = {} },
+                bc = { lines = { "Page %c of %t" }, line_font_size = { [1] = 16 }, v_offset = 35 },
+                br = { lines = {} },
+            },
+        },
+    },
+    {
+        name = _("Full status"),
+        preset = {
+            enabled = true,
+            positions = {
+                tl = { lines = { "%A \xE2\x8B\xAE %T" }, line_font_size = { [1] = 12 } },
+                tc = { lines = { "%k \xC2\xB7 %a %d" }, line_font_size = { [1] = 14 }, line_style = { [1] = "bold" } },
+                tr = { lines = { "%C" }, line_style = { [1] = "bold" } },
+                bl = { lines = { "\xE2\x8F\xB3 %R session" }, v_offset = 16 },
+                bc = { lines = { "Page %c of %t" }, line_font_size = { [1] = 16 }, v_offset = 35 },
+                br = { lines = { "%B %W" }, line_font_size = { [1] = 10 }, v_offset = 14 },
+            },
+        },
+    },
+    {
+        name = _("Book info"),
+        preset = {
+            enabled = true,
+            positions = {
+                tl = { lines = {} },
+                tc = { lines = { "%T", "%A" }, line_style = { [1] = "bold", [2] = "italic" }, line_font_size = { [2] = 11 } },
+                tr = { lines = {} },
+                bl = { lines = {} },
+                bc = { lines = { "%c / %t (%p)" }, v_offset = 35 },
+                br = { lines = {} },
+            },
+        },
+    },
+    {
+        name = _("Chapter focus"),
+        preset = {
+            enabled = true,
+            positions = {
+                tl = { lines = {} },
+                tc = { lines = { "%C" }, line_style = { [1] = "bold" } },
+                tr = { lines = {} },
+                bl = { lines = { "%g / %G (%P)" } },
+                bc = { lines = { "Page %c of %t" }, v_offset = 35 },
+                br = { lines = { "%h left" } },
+            },
+        },
+    },
+}
+
+function Bookends:buildPresetsMenu()
+    local Presets = require("ui/presets")
+    local InfoMessage = require("ui/widget/infomessage")
+    local T = require("ffi/util").template
+
+    -- Start with the standard user preset menu
+    local items = Presets.genPresetMenuItemTable(self.preset_obj)
+
+    -- Add built-in presets section before user presets (after the "Create" item)
+    local builtin_items = {
+        {
+            text = "\xE2\x94\x80\xE2\x94\x80 " .. _("Built-in") .. " \xE2\x94\x80\xE2\x94\x80",
+            enabled_func = function() return false end,
+        },
+    }
+    for _i, bp in ipairs(self.BUILT_IN_PRESETS) do
+        table.insert(builtin_items, {
+            text = bp.name,
+            keep_menu_open = true,
+            callback = function()
+                self:loadPreset(bp.preset)
+                UIManager:show(InfoMessage:new{
+                    text = T(_("Preset '%1' loaded."), bp.name),
+                    timeout = 2,
+                })
+            end,
+        })
+    end
+
+    -- Insert built-in items after position 1 (the "Create new" item)
+    for i = #builtin_items, 1, -1 do
+        table.insert(items, 2, builtin_items[i])
+    end
+
+    -- Add separator before user presets if there are any
+    if #self.preset_obj.presets > 0 or next(self.preset_obj.presets) then
+        table.insert(items, 2 + #builtin_items, {
+            text = "\xE2\x94\x80\xE2\x94\x80 " .. _("Your presets") .. " \xE2\x94\x80\xE2\x94\x80",
+            enabled_func = function() return false end,
+        })
+    end
+
+    return items
 end
 
 -- ─── Line editing ────────────────────────────────────────
