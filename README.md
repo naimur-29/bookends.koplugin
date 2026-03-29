@@ -203,4 +203,4 @@ Tested on KOReader 2025.08 (Kindle PW5). Should work on any KOReader device.
 
 ## License
 
-MIT
+AGPL-3.0 — see [LICENSE](LICENSE)
