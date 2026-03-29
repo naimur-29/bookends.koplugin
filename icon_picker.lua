@@ -16,8 +16,10 @@ IconPicker.CATALOG = {
         { "\xEE\xA9\x9A", _("Memory chip") },         -- U+EA5A
     }},
     { _("Time"), {
+        { "\xE2\x8F\xB0", _("Clock") },               -- U+23F0
         { "\xE2\x8C\x9A", _("Watch") },               -- U+231A
         { "\xE2\x8F\xB3", _("Hourglass") },           -- U+23F3
+        { "\xE2\x8C\x9B", _("Hourglass (filled)") },  -- U+231B
     }},
     { _("Symbols"), {
         { "\xE2\x98\xBC", _("Sun / brightness") },    -- U+263C
