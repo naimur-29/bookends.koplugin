@@ -924,7 +924,7 @@ function Bookends:showLineManageDialog(pos, line_idx, touchmenu_instance)
     end
 
     -- Build "Move to" buttons — one row per available region (excluding current)
-    for _, p in ipairs(self.POSITIONS) do
+    for _i, p in ipairs(self.POSITIONS) do
         if p.key ~= pos.key then
             table.insert(other_buttons, {
                 {
