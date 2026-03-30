@@ -81,6 +81,26 @@ function Bookends:init()
         buildPreset = function() return self:buildPreset() end,
         loadPreset = function(preset) self:loadPreset(preset) end,
     }
+
+    -- Register gesture/dispatcher actions
+    self:onDispatcherRegisterActions()
+end
+
+function Bookends:onDispatcherRegisterActions()
+    local Dispatcher = require("dispatcher")
+    Dispatcher:registerAction("toggle_bookends", {
+        category = "none",
+        event = "ToggleBookends",
+        title = _("Toggle bookends"),
+        reader = true,
+    })
+end
+
+function Bookends:onToggleBookends()
+    self.enabled = not self.enabled
+    G_reader_settings:saveSetting("bookends_enabled", self.enabled)
+    self:markDirty()
+    return true
 end
 
 function Bookends:loadSettings()
