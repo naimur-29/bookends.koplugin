@@ -107,18 +107,14 @@ function Bookends:loadSettings()
     local footer_settings = self.ui.view.footer.settings
     self.enabled = G_reader_settings:readSetting("bookends_enabled", false)
 
-    -- Migrate old v_offset/h_offset to new margin settings
-    local old_v = G_reader_settings:readSetting("bookends_v_offset")
-    local old_h = G_reader_settings:readSetting("bookends_h_offset")
-
     self.defaults = {
         font_face = G_reader_settings:readSetting("bookends_font_face", Font.fontmap["ffont"]),
         font_size = G_reader_settings:readSetting("bookends_font_size", footer_settings.text_font_size),
         font_bold = G_reader_settings:readSetting("bookends_font_bold", false),
-        margin_top    = G_reader_settings:readSetting("bookends_margin_top", old_v or 10),
-        margin_bottom = G_reader_settings:readSetting("bookends_margin_bottom", old_v or 25),
-        margin_left   = G_reader_settings:readSetting("bookends_margin_left", old_h or 18),
-        margin_right  = G_reader_settings:readSetting("bookends_margin_right", old_h or 18),
+        margin_top    = G_reader_settings:readSetting("bookends_margin_top", 10),
+        margin_bottom = G_reader_settings:readSetting("bookends_margin_bottom", 25),
+        margin_left   = G_reader_settings:readSetting("bookends_margin_left", 18),
+        margin_right  = G_reader_settings:readSetting("bookends_margin_right", 18),
         overlap_gap = G_reader_settings:readSetting("bookends_overlap_gap", 50),
         truncation_priority = G_reader_settings:readSetting("bookends_truncation_priority", "center"),
     }
@@ -146,6 +142,9 @@ function Bookends:loadSettings()
             if not saved.lines then
                 saved.lines = {}
             end
+            -- v2 migration: clear old per-position offsets (now handled by global margins)
+            saved.v_offset = nil
+            saved.h_offset = nil
             self.positions[pos.key] = saved
         else
             -- First run: use default configuration
@@ -174,16 +173,15 @@ function Bookends:loadPreset(preset)
         G_reader_settings:saveSetting("bookends_enabled", self.enabled)
     end
     if preset.defaults then
-        -- Migrate old v_offset/h_offset to margins if no margin keys present
         local pd = preset.defaults
-        if pd.v_offset and not pd.margin_top then
-            pd.margin_top = pd.v_offset
-            pd.margin_bottom = pd.v_offset
-        end
-        if pd.h_offset and not pd.margin_left then
-            pd.margin_left = pd.h_offset
-            pd.margin_right = pd.h_offset
-        end
+        -- Ignore old v_offset/h_offset keys from pre-v2 presets
+        pd.v_offset = nil
+        pd.h_offset = nil
+        -- Reset margins before applying preset values
+        self.defaults.margin_top = 10
+        self.defaults.margin_bottom = 25
+        self.defaults.margin_left = 18
+        self.defaults.margin_right = 18
         for k, v in pairs(pd) do
             self.defaults[k] = v
         end
@@ -846,32 +844,28 @@ end
 -- ─── Presets ─────────────────────────────────────────────
 
 Bookends.BUILT_IN_PRESETS = {
-    {
-        name = _("Speed reader"),
-        preset = {
-            enabled = true,
-            positions = {
-                tl = { lines = { " %k" }, line_font_size = { [1] = 16 }, line_style = { [1] = "bold" } },
-                tc = { lines = { "\xE2\x8F\xB3 %R \xC2\xBB %s page(s) read this session" }, line_font_size = { [1] = 16 }, line_style = { [1] = "bold" } },
-                tr = { lines = { "%B %b" }, line_font_size = { [1] = 16 }, line_style = { [1] = "bold" } },
-                bl = { lines = { "(%p)", " %E reading this book" } },
-                bc = { lines = { "Page %c of %t", " %L pages ~ %H left in book" },
-                    line_font_size = { [1] = 18 }, line_style = { [1] = "italic", [2] = "bold" },
-                    line_v_nudge = { [1] = -14 } },
-                br = { lines = { "(%P)", "%l page(s) ~ %h left in chapter" }, line_font_size = { [2] = 12 } },
-            },
-        },
-    },
+    -- Nerd Font icon references used in presets:
+    -- U+F017 = \xEF\x80\x97 clock
+    -- U+F024 = \xEF\x80\xA4 flag
+    -- U+F02D = \xEF\x80\xAD book
+    -- U+F06E = \xEF\x81\xAE eye
+    -- U+F097 = \xEF\x82\x97 bookmark
+    -- U+F0EB = \xEF\x83\xAB lightbulb
+    -- U+F185 = \xEF\x86\x85 sun
     {
         name = _("Classic alternating"),
         preset = {
             enabled = true,
+            defaults = {
+                margin_top = 10, margin_bottom = 50,
+                margin_left = 18, margin_right = 18,
+            },
             positions = {
                 tl = { lines = { "%T" }, line_font_size = { [1] = 18 }, line_style = { [1] = "bolditalic" }, line_page_filter = { [1] = "even" } },
                 tc = { lines = {} },
                 tr = { lines = { "%C" }, line_font_size = { [1] = 18 }, line_style = { [1] = "bolditalic" }, line_page_filter = { [1] = "odd" } },
                 bl = { lines = {} },
-                bc = { lines = { "%c" }, line_font_size = { [1] = 18 } },
+                bc = { lines = { "p%c" }, line_font_size = { [1] = 18 } },
                 br = { lines = {} },
             },
         },
@@ -880,13 +874,37 @@ Bookends.BUILT_IN_PRESETS = {
         name = _("Rich detail"),
         preset = {
             enabled = true,
+            defaults = {
+                margin_top = 10, margin_bottom = 25,
+                margin_left = 18, margin_right = 18,
+            },
             positions = {
-                tl = { lines = { "%A \xE2\x8B\xAE %T", " %q highlight(s)" }, line_font_size = { [1] = 12 } },
+                tl = { lines = { "%A \xE2\x8B\xAE %T" }, line_font_size = { [1] = 12 } },
                 tc = { lines = { "%k \xC2\xB7 %a %d" }, line_font_size = { [1] = 14 }, line_style = { [1] = "bold" } },
-                tr = { lines = { "%C" } },
-                bl = { lines = { "\xE2\x8F\xB3 %R \xE2\x80\xBA %s page session" } },
-                bc = { lines = { "Page %c of %t" }, line_font_size = { [1] = 18 } },
-                br = { lines = { "%B", "%W", "%F", "%f \xE2\x98\xBC" } },
+                tr = { lines = { "%C", "%x Bookmark(s) \xEF\x82\x97" } },
+                bl = { lines = { "\xEF\x83\xAB %F", "\xEF\x86\x85 %f", "\xE2\x8F\xB3 %R \xC2\xBB %s page session" } },
+                bc = { lines = { "Page %c of %t" }, v_offset = 30, line_font_size = { [1] = 18 } },
+                br = { lines = { "%B", "%W", "%q highlight(s) \xEF\x80\xA4" } },
+            },
+        },
+    },
+    {
+        name = _("Speed reader"),
+        preset = {
+            enabled = true,
+            defaults = {
+                margin_top = 10, margin_bottom = 25,
+                margin_left = 18, margin_right = 18,
+            },
+            positions = {
+                tl = { lines = { "\xEF\x80\x97 %k" }, line_font_size = { [1] = 16 }, line_style = { [1] = "bold" } },
+                tc = { lines = { "\xE2\x8F\xB3 %R \xC2\xBB %s page(s) read this session" }, line_font_size = { [1] = 16 }, line_style = { [1] = "bold" } },
+                tr = { lines = { "%B %b" }, line_font_size = { [1] = 16 }, line_style = { [1] = "bold" } },
+                bl = { lines = { "%p", "\xEF\x81\xAE %E reading this book" } },
+                bc = { lines = { "Page %c of %t", "\xEF\x80\xAD %L pages ~ %H left in book" },
+                    v_offset = 4, line_font_size = { [1] = 18 }, line_style = { [1] = "italic", [2] = "bold" },
+                    line_v_nudge = { [1] = -14 } },
+                br = { lines = { "%P", "%l page(s) ~ %h left in chapter" }, line_font_size = { [2] = 12 } },
             },
         },
     },
@@ -907,7 +925,7 @@ function Bookends:buildPresetsMenu()
         table.insert(sorted_builtins, bp)
     end
     table.sort(sorted_builtins, function(a, b) return a.name < b.name end)
-    for _, bp in ipairs(sorted_builtins) do
+    for _i, bp in ipairs(sorted_builtins) do
         table.insert(items, {
             text = bp.name,
             keep_menu_open = true,
