@@ -18,11 +18,11 @@ Six positions: **Top-left**, **Top-center**, **Top-right**, **Bottom-left**, **B
 
 ### Screenshots
 
-| Title page | Speed Reader preset | Classic Alternating preset |
+| Title page | Speed Reader | Classic Alternating |
 |:---:|:---:|:---:|
 | ![Title page](screenshots/title-page.png) | ![Speed Reader](screenshots/speed-reader.png) | ![Classic Alternating](screenshots/classic-alternating.png) |
 
-| Rich Detail preset | Main menu | Adjust margins |
+| Rich Detail | Main menu | Adjust margins |
 |:---:|:---:|:---:|
 | ![Rich Detail](screenshots/rich-detail.png) | ![Main menu](screenshots/main-menu.png) | ![Adjust margins](screenshots/adjust-margins.png) |
 
