@@ -890,8 +890,11 @@ Bookends.BUILT_IN_PRESETS = {
     -- U+F02D = \xEF\x80\xAD book
     -- U+F06E = \xEF\x81\xAE eye
     -- U+F097 = \xEF\x82\x97 bookmark
+    -- U+F0A0 = \xEF\x82\xA0 HDD
     -- U+F0EB = \xEF\x83\xAB lightbulb
     -- U+F185 = \xEF\x86\x85 sun
+    -- U+EA5A = \xEE\xA9\x9A memory chip
+    -- U+ECA8 = \xEE\xB2\xA8 wifi on (dynamic via %W)
     {
         name = _("Classic alternating"),
         preset = {
@@ -945,6 +948,24 @@ Bookends.BUILT_IN_PRESETS = {
                     v_offset = 4, line_font_size = { [1] = 18 }, line_style = { [1] = "italic", [2] = "bold" },
                     line_v_nudge = { [1] = -14 } },
                 br = { lines = { "%P", "%l page(s) ~ %h left in chapter" }, line_font_size = { [2] = 12 } },
+            },
+        },
+    },
+    {
+        name = _("SimpleUI status bar"),
+        preset = {
+            enabled = true,
+            defaults = {
+                margin_top = 22, margin_bottom = 50,
+                margin_left = 35, margin_right = 35,
+            },
+            positions = {
+                tl = { lines = { "%k" }, line_font_size = { [1] = 15 } },
+                tc = { lines = {} },
+                tr = { lines = { "%W  %B%b  \xEF\x82\xA0 %v  \xEE\xA9\x9A %M  \xE2\x98\x80 %f" }, line_font_size = { [1] = 15 } },
+                bl = { lines = {} },
+                bc = { lines = { "Page %c of %t" }, line_font_size = { [1] = 18 } },
+                br = { lines = {} },
             },
         },
     },

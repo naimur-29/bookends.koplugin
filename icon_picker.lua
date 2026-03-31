@@ -14,7 +14,8 @@ IconPicker.CATALOG = {
     }},
     { _("Device"), {
         { "\xEF\x83\xAB", _("Lightbulb") },             -- U+F0EB fa-lightbulb-o
-        { "\xEF\x86\x85", _("Sun") },                   -- U+F185 fa-sun-o
+        { "\xE2\x98\x80", _("Sun (filled)") },             -- U+2600 BLACK SUN WITH RAYS
+        { "\xEF\x86\x85", _("Sun (outline)") },          -- U+F185 fa-sun-o
         { "\xEF\x86\x86", _("Moon") },                  -- U+F186 fa-moon-o
         { "\xEE\x88\x97", _("Paper aeroplane") },        -- U+E217
         { "\xEF\x81\x82", _("Adjust / contrast") },     -- U+F042 fa-adjust
@@ -24,6 +25,7 @@ IconPicker.CATALOG = {
         { "\xEF\x87\xAB", _("Wi-Fi") },                 -- U+F1EB fa-wifi
         { "\xEF\x83\x82", _("Cloud") },                 -- U+F0C2 fa-cloud
         { "\xEE\xA9\x9A", _("Memory chip") },           -- U+EA5A
+        { "\xEF\x82\xA0", _("HDD / disk") },             -- U+F0A0 fa-hdd-o
     }},
     { _("Reading"), {
         { "\xEF\x80\xAD", _("Book") },                  -- U+F02D fa-book

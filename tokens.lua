@@ -27,7 +27,8 @@ function Tokens.expand(format_str, ui, session_elapsed, session_pages_read, prev
             ["%r"] = "[pg/hr]", ["%E"] = "[total]",
             ["%b"] = "[batt]", ["%B"] = "[batt]", ["%W"] = "[wifi]",
             ["%f"] = "[light]", ["%F"] = "[warmth]",
-            ["%m"] = "[mem]",
+            ["%m"] = "[mem]", ["%M"] = "[rss]",
+            ["%v"] = "[disk]",
         }
         return format_str:gsub("(%%%a)", preview)
     end
@@ -259,7 +260,7 @@ function Tokens.expand(format_str, ui, session_elapsed, session_pages_read, prev
         end
     end
 
-    -- Memory usage
+    -- Memory usage (system-wide percentage)
     local mem_usage = ""
     if needs("m") then
         local meminfo = io.open("/proc/meminfo", "r")
@@ -276,6 +277,35 @@ function Tokens.expand(format_str, ui, session_elapsed, session_pages_read, prev
             meminfo:close()
             if total and available and total > 0 then
                 mem_usage = math.floor((total - available) / total * 100) .. "%"
+            end
+        end
+    end
+
+    -- RAM usage (KOReader process RSS in MB)
+    local ram_mb = ""
+    if needs("M") then
+        local statm = io.open("/proc/self/statm", "r")
+        if statm then
+            local line = statm:read("*l")
+            statm:close()
+            if line then
+                local rss = line:match("%S+%s+(%d+)")
+                if rss then
+                    ram_mb = math.floor(tonumber(rss) * 4 / 1024) .. "M"
+                end
+            end
+        end
+    end
+
+    -- Disk available
+    local disk_avail = ""
+    if needs("v") then
+        local util = require("util")
+        if util.diskUsage then
+            local drive = Device.home_dir or "/"
+            local ok, usage = pcall(util.diskUsage, drive)
+            if ok and usage and type(usage.available) == "number" and usage.available > 0 then
+                disk_avail = string.format("%.1fG", usage.available / 1024 / 1024 / 1024)
             end
         end
     end
@@ -323,6 +353,8 @@ function Tokens.expand(format_str, ui, session_elapsed, session_pages_read, prev
         ["%f"] = fl_intensity,
         ["%F"] = fl_warmth,
         ["%m"] = tostring(mem_usage),
+        ["%M"] = ram_mb,
+        ["%v"] = disk_avail,
     }
     -- Track whether all tokens in the string resolved to empty or "0"
     local has_token = false
