@@ -29,7 +29,7 @@ function Tokens.expand(format_str, ui, session_elapsed, session_pages_read, prev
             ["%f"] = "[light]", ["%F"] = "[warmth]",
             ["%m"] = "[mem]", ["%M"] = "[rss]",
             ["%v"] = "[disk]",
-            ["%bar"] = "[\xE2\x96\xB6\xE2\x96\xB6]",  -- ▶▶
+            ["%bar"] = "\xE2\x96\xB0\xE2\x96\xB0\xE2\x96\xB1\xE2\x96\xB1",  -- ▰▰▱▱
         }
         local r = format_str:gsub("%%bar", preview["%bar"])
         r = r:gsub("(%%%a)", preview)
