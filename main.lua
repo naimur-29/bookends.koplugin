@@ -1902,7 +1902,7 @@ function Bookends:editLineString(pos, line_idx)
         local current = line_size or self:getPositionSetting(pos.key, "font_size")
         UIManager:show(SpinWidget:new{
             value = current,
-            value_min = 8,
+            value_min = 1,
             value_max = 36,
             default_value = self:getPositionSetting(pos.key, "font_size"),
             title_text = _("Font size for line") .. " " .. line_idx,
