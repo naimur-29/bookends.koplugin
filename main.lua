@@ -1,3 +1,6 @@
+-- i18n must be installed before any module captures require("gettext")
+require("i18n").install()
+
 local Device = require("device")
 local Font = require("ui/font")
 local UIManager = require("ui/uimanager")
