@@ -186,11 +186,16 @@ function Tokens.expand(format_str, ui, session_elapsed, session_pages_read, prev
         local ch_pct = 0
         if is_cre and bar_doc.getCurrentPos and ui.toc then
             local cur_pos = bar_doc:getCurrentPos()
-            local prev_chapter = ui.toc:getPreviousChapter(bar_pageno)
+            -- Find current chapter start: getPreviousChapter returns < pageno,
+            -- so on a chapter start page we need to use pageno itself
+            local chapter_start = ui.toc:getPreviousChapter(bar_pageno)
+            if ui.toc:isChapterStart(bar_pageno) then
+                chapter_start = bar_pageno
+            end
             local next_chapter = ui.toc:getNextChapter(bar_pageno)
-            if prev_chapter then
-                local prev_xp = bar_doc:getPageXPointer(prev_chapter)
-                local start_pos = prev_xp and bar_doc:getPosFromXPointer(prev_xp) or 0
+            if chapter_start then
+                local start_xp = bar_doc:getPageXPointer(chapter_start)
+                local start_pos = start_xp and bar_doc:getPosFromXPointer(start_xp) or 0
                 local end_pos
                 if next_chapter then
                     local next_xp = bar_doc:getPageXPointer(next_chapter)

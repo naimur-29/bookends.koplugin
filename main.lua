@@ -601,11 +601,14 @@ function Bookends:paintTo(bb, x, y)
                 elseif bar_cfg.type == "chapter" then
                     if is_cre and doc.getCurrentPos and self.ui.toc then
                         local cur_pos = doc:getCurrentPos()
-                        local prev_chapter = self.ui.toc:getPreviousChapter(pageno_local)
+                        local chapter_start = self.ui.toc:getPreviousChapter(pageno_local)
+                        if self.ui.toc:isChapterStart(pageno_local) then
+                            chapter_start = pageno_local
+                        end
                         local next_chapter = self.ui.toc:getNextChapter(pageno_local)
-                        if prev_chapter then
-                            local prev_xp = doc:getPageXPointer(prev_chapter)
-                            local start_pos = prev_xp and doc:getPosFromXPointer(prev_xp) or 0
+                        if chapter_start then
+                            local start_xp = doc:getPageXPointer(chapter_start)
+                            local start_pos = start_xp and doc:getPosFromXPointer(start_xp) or 0
                             local end_pos
                             if next_chapter then
                                 local next_xp = doc:getPageXPointer(next_chapter)
