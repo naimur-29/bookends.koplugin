@@ -1126,7 +1126,7 @@ function Bookends:buildMainMenu()
                     separator = true,
                 },
                 {
-                    text = _("Progress bar colours"),
+                    text = _("Progress bar colors"),
                     sub_item_table_func = function()
                         return self:buildBarColorsMenu()
                     end,
@@ -1511,11 +1511,11 @@ function Bookends:buildBarColorsMenu()
     return {
         {
             text_func = function()
-                return _("Read colour") .. ": " .. pctLabel("fill", 75)
+                return _("Read color") .. ": " .. pctLabel("fill", 75)
             end,
             keep_menu_open = true,
             callback = function(touchmenu_instance)
-                colorSpinner(_("Read colour (% black)"), "fill", 75, touchmenu_instance)
+                colorSpinner(_("Read color (% black)"), "fill", 75, touchmenu_instance)
             end,
             hold_callback = function(touchmenu_instance)
                 bc.fill = nil; saveColors()
@@ -1524,11 +1524,11 @@ function Bookends:buildBarColorsMenu()
         },
         {
             text_func = function()
-                return _("Unread colour") .. ": " .. pctLabel("bg", 25)
+                return _("Unread color") .. ": " .. pctLabel("bg", 25)
             end,
             keep_menu_open = true,
             callback = function(touchmenu_instance)
-                colorSpinner(_("Unread colour (% black)"), "bg", 25, touchmenu_instance)
+                colorSpinner(_("Unread color (% black)"), "bg", 25, touchmenu_instance)
             end,
             hold_callback = function(touchmenu_instance)
                 bc.bg = nil; saveColors()
@@ -1537,11 +1537,11 @@ function Bookends:buildBarColorsMenu()
         },
         {
             text_func = function()
-                return _("Metro track colour") .. ": " .. pctLabel("track", 75)
+                return _("Metro track color") .. ": " .. pctLabel("track", 75)
             end,
             keep_menu_open = true,
             callback = function(touchmenu_instance)
-                colorSpinner(_("Metro track colour (% black)"), "track", 75, touchmenu_instance)
+                colorSpinner(_("Metro track color (% black)"), "track", 75, touchmenu_instance)
             end,
             hold_callback = function(touchmenu_instance)
                 bc.track = nil; saveColors()
@@ -1550,11 +1550,11 @@ function Bookends:buildBarColorsMenu()
         },
         {
             text_func = function()
-                return _("Tick colour") .. ": " .. pctLabel("tick", 100)
+                return _("Tick color") .. ": " .. pctLabel("tick", 100)
             end,
             keep_menu_open = true,
             callback = function(touchmenu_instance)
-                colorSpinner(_("Tick colour (% black)"), "tick", 100, touchmenu_instance)
+                colorSpinner(_("Tick color (% black)"), "tick", 100, touchmenu_instance)
             end,
             hold_callback = function(touchmenu_instance)
                 bc.tick = nil; saveColors()
@@ -1562,7 +1562,7 @@ function Bookends:buildBarColorsMenu()
             end,
         },
         {
-            text = _("Invert tick colour on read portion"),
+            text = _("Invert tick color on read portion"),
             checked_func = function() return bc.invert_read_ticks ~= false end,
             callback = function()
                 if bc.invert_read_ticks == false then
