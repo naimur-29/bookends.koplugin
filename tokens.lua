@@ -414,17 +414,13 @@ function Tokens.expand(format_str, ui, session_elapsed, session_pages_read, prev
 
 	-- Reading speed and total book time (via statistics plugin)
 	local reading_speed = ""
-	local prev_session_pages_read = 0
 	local total_book_time = ""
 	if needs("r", "E") and ui.statistics then
 		-- Calculate Pages per Hour based on current session
 		if needs("r") and session_elapsed and session_pages_read then
 			if session_elapsed > 0 and session_pages_read > 0 then
 				-- (pages / seconds) * 3600 = pages per hour
-				if session_pages_read > prev_session_pages_read then
-					reading_speed = tostring(math.floor((session_pages_read / session_elapsed) * 3600))
-					prev_session_pages_read = session_pages_read
-				end
+				reading_speed = tostring(math.floor((session_pages_read / session_elapsed) * 3600))
 			else
 				local avg = ui.statistics.avg_time
 				if avg and avg > 0 then
@@ -440,43 +436,49 @@ function Tokens.expand(format_str, ui, session_elapsed, session_pages_read, prev
 			end
 		end
 	end
+
 	-- Helper to format duration including days
 	local function formatDuration(seconds)
 		if not seconds or seconds <= 0 then
 			return ""
 		end
-		local days = math.floor(seconds / 86400)
-		local hours = math.floor((seconds % 86400) / 3600)
+
+		-- Calculate total hours (including what would have been days)
+		local hours = math.floor(seconds / 3600)
 		local minutes = math.floor((seconds % 3600) / 60)
+
 		local res = ""
-		if days > 0 then
-			res = days .. "d " .. hours .. "h " .. minutes .. "m"
-		elseif hours > 0 then
+		if hours > 0 then
 			res = hours .. "h " .. minutes .. "m"
 		else
 			res = minutes .. "m"
 		end
+
 		return res
 	end
 	-- Time left in chapter / document (calculated via reading_speed)
 	local time_left_chapter = ""
 	local time_left_doc = ""
+	local pph
 	if needs("h", "H") and pageno then
 		-- Ensure we have a numeric reading speed (Pages Per Hour)
 		-- We use the 'reading_speed' variable calculated later in your script,
 		-- or fallback to the average from statistics.
-		local pph = tonumber(reading_speed)
-		if not pph or pph <= 0 then
-			local avg = ui.statistics and ui.statistics.avg_time
-			pph = (avg and avg > 0) and (3600 / avg) or 0
+		if session_elapsed and session_elapsed > 0 and (session_pages_read or 0) > 0 then
+			pph = math.floor((session_pages_read / session_elapsed) * 3600)
+		elseif ui.statistics and ui.statistics.avg_time and ui.statistics.avg_time > 0 then
+			pph = math.floor(3600 / ui.statistics.avg_time)
 		end
 
-		local user_duration_format = G_reader_settings:readSetting("duration_format", "classic")
-
 		if pph > 0 then
+			-- 2. Time left in Chapter (%h)
 			if needs("h") then
-				if session_pages_read > 0 and chapter_pages_left and chapter_pages_left > 0 then
-					time_left_chapter = formatDuration((chapter_pages_left / pph) * 3600)
+				-- Safely convert your string-initialised variables to numbers
+				local s_read = tonumber(session_pages_read) or 0
+				local c_left = tonumber(chapter_pages_left) or 0
+
+				if s_read > 0 and c_left > 0 then
+					time_left_chapter = formatDuration((c_left / pph) * 3600)
 				else
 					local ch_left = ui.toc and ui.toc:getChapterPagesLeft(pageno, true)
 					if ch_left and ch_left > 0 then
@@ -484,9 +486,14 @@ function Tokens.expand(format_str, ui, session_elapsed, session_pages_read, prev
 					end
 				end
 			end
+
+			-- 3. Time left in Book (%H)
 			if needs("H") then
-				if session_pages_read > 0 and pages_left_book and pages_left_book > 0 then
-					time_left_doc = formatDuration((pages_left_book / pph) * 3600)
+				local s_read = tonumber(session_pages_read) or 0
+				local b_left = tonumber(pages_left_book) or 0
+
+				if s_read > 0 and b_left > 0 then
+					time_left_doc = formatDuration((b_left / pph) * 3600)
 				else
 					local doc_left = doc:getTotalPagesLeft(pageno)
 					if doc_left and doc_left > 0 then
